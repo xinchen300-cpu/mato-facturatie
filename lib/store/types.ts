@@ -46,6 +46,10 @@ export interface Store {
   updateContract(id: number, patch: Partial<Omit<Contract, "id">>): Promise<void>;
   deleteContract(id: number): Promise<void>;
 
+  /** The health index (gezondheidsindex) per month, "YYYY-MM" -> value, for indexing contracts. */
+  healthIndex(): Promise<Record<string, number>>;
+  saveHealthIndex(values: Record<string, number>): Promise<void>;
+
   /** Sales typed in by hand, per client and month (replace the MATO Info sales of that client and month). */
   manualSales(period?: string): Promise<ManualSales[]>;
   saveManualSales(input: Omit<ManualSales, "id">): Promise<void>;

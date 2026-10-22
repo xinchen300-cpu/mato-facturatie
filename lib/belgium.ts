@@ -6,6 +6,8 @@ export const MONTHS_NL = [
   "juli", "augustus", "september", "oktober", "november", "december",
 ];
 
+export const MONTHS_SHORT_NL = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
 export function periodLabel(period: string): string {
   const [year, month] = period.split("-");
   const name = MONTHS_NL[Number(month) - 1];
@@ -15,6 +17,11 @@ export function periodLabel(period: string): string {
 export function previousPeriod(period: string): string {
   const [y, m] = period.split("-").map(Number);
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+export function nextPeriod(period: string): string {
+  const [y, m] = period.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
 }
 
 export function currentPeriod(today = new Date()): string {

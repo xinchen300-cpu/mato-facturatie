@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import * as be from "@/lib/belgium";
 import { buildOrderPayload } from "@/lib/billit";
-import { applyManual, compute } from "@/lib/contracts";
+import { applyManual, compute, indexMonths } from "@/lib/contracts";
 import { closeMonth, deleteInvoice, mailValues } from "@/lib/invoicing";
 import { render } from "@/lib/mailer";
 import { clientTerminals, loadOverview } from "@/lib/month";
@@ -18,7 +18,8 @@ const client = (id: number, owners: string[]): Client => ({
 });
 const contract = (terms: Partial<Contract>): Contract => ({
   id: 1, client_id: 1, name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl", sales_vat_pct: 6,
-  per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", fee_pct: 0, fee_mode: "payout", ...terms,
+  per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", fee_pct: 0, fee_mode: "payout",
+  fixed_alt: 0, fixed_alt_months: [], indexed: false, ...terms,
 });
 const row = (day: string, revenue: number, items = 1, owner = "business:a", machine = "m1"): DailyRow =>
   ({ owner, machine_id: machine, day, items, revenue });
@@ -234,5 +235,38 @@ describe("transaction costs", () => {
     expect(values.uitbetaling).toBe(be.fmtEur(statement.payout));
     expect(String(values.aftrek_zin)).toContain("transactiekosten");
     expect((await statementPdf(statement, statement.snapshot.company)).subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});
+
+describe("other months and yearly indexation", () => {
+  it("charges another fixed amount in some months of every year", () => {
+    const sferio = contract({ starts_on: "2026-07-01", pct: 15, fixed_monthly: 180, fixed_alt: 200, fixed_alt_months: [10, 12] });
+    const fixed = (period: string) => compute(client(1, ["business:a"]), period, [], [sferio]).lines.find((l) => l.kind === "fixed")!.unit_price;
+    expect([fixed("2026-09"), fixed("2026-10"), fixed("2026-11"), fixed("2026-12"), fixed("2027-01"), fixed("2027-10")])
+      .toEqual([180, 200, 180, 200, 180, 200]);
+  });
+
+  it("indexes from the first whole month after each anniversary, with the index of the month before", () => {
+    const chens = { indexed: true, starts_on: "2026-01-31" };
+    expect(indexMonths(chens, "2027-01")).toEqual({ base: "2025-12", current: null, since: null, first: "2027-02" });
+    expect(indexMonths(chens, "2027-02")).toMatchObject({ base: "2025-12", current: "2027-01", since: "2027-02" });
+    expect(indexMonths(chens, "2028-01")).toMatchObject({ current: "2027-01" });
+    expect(indexMonths(chens, "2028-05")).toMatchObject({ current: "2028-01", since: "2028-02" });
+    expect(indexMonths({ indexed: true, starts_on: "2026-07-01" }, "2027-07")).toMatchObject({ base: "2026-06", current: "2027-06" });
+    expect(indexMonths({ indexed: false, starts_on: "2026-07-01" }, "2027-07")).toBeNull();
+  });
+
+  it("indexes the amounts, not the percentage, and reports a missing index", () => {
+    const sferio = contract({ starts_on: "2026-07-01", pct: 15, fixed_monthly: 180, fixed_alt: 200, fixed_alt_months: [10, 12], indexed: true });
+    const rows = [row("2027-07-05", 100), row("2027-10-05", 100)];
+    const index = { "2026-06": 128.5, "2027-06": 131.07 };
+    const july = compute(client(1, ["business:a"]), "2027-07", rows, [sferio], index);
+    expect(july.lines.map((l) => [l.kind, l.unit_price])).toEqual([["pct", 15], ["fixed", 183.6]]); // 180 × 131,07/128,5
+    expect(july.lines[1].detail).toContain("gezondheidsindex");
+    expect(compute(client(1, ["business:a"]), "2027-10", rows, [sferio], index).lines[1].unit_price).toBe(204);
+    expect(compute(client(1, ["business:a"]), "2027-06", rows, [sferio], index).lines.find((l) => l.kind === "fixed")!.unit_price).toBe(180);
+    const missing = compute(client(1, ["business:a"]), "2027-07", rows, [sferio], { "2026-06": 128.5 });
+    expect(missing.index_missing).toEqual(["2027-06"]);
+    expect(missing.lines[1].unit_price).toBe(180);
   });
 });

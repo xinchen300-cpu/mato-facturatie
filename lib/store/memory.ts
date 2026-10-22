@@ -78,6 +78,7 @@ type Db = {
   invoices: Invoice[];
   statements: Statement[];
   manual: ManualSales[];
+  healthIndex: Record<string, number>;
   sales: DetailRow[];
   next: number;
 };
@@ -98,7 +99,7 @@ function seed(): Db {
   const contract = (client: string, terms: Partial<Contract>): Contract => ({
     id: next++, client_id: id(client), name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl",
     sales_vat_pct: 6, per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "",
-    fee_pct: 0, fee_mode: "payout", ...terms,
+    fee_pct: 0, fee_mode: "payout", fixed_alt: 0, fixed_alt_months: [], indexed: false, ...terms,
   });
   return {
     settings: {
@@ -113,7 +114,7 @@ function seed(): Db {
     contracts: [
       contract("Brood", { name: "Commissie", pct: 15 }),
       contract("Chens Garden", { name: "Maaltijden", pct: 20, base: "excl", fee_pct: 0.9 }),
-      contract("ChocaBake", { name: "Huur + commissie", pct: 5, fixed_monthly: 150 }),
+      contract("ChocaBake", { name: "Huur + commissie", pct: 5, fixed_monthly: 150, indexed: true }),
       contract("Drank Automaat", { name: "Per stuk", per_item: 0.25 }),
       contract("GreenBowl", { name: "Commissie met minimum", pct: 12, minimum_monthly: 100 }),
       contract("Hillewaere", { pct: 10 }),
@@ -127,6 +128,7 @@ function seed(): Db {
     invoices: [],
     statements: [],
     manual: [],
+    healthIndex: {},
     sales,
     next,
   };
@@ -208,6 +210,14 @@ export class MemoryStore implements Store {
 
   async deleteContract(id: number) {
     this.db.contracts = this.db.contracts.filter((c) => c.id !== id);
+  }
+
+  async healthIndex() {
+    return { ...this.db.healthIndex };
+  }
+
+  async saveHealthIndex(values: Record<string, number>) {
+    Object.assign(this.db.healthIndex, values);
   }
 
   async manualSales(period?: string) {

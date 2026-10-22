@@ -1,7 +1,7 @@
 import { deleteContract, saveContract } from "@/app/actions";
 import { ActionForm, Submit } from "@/components/client";
 import { Badge, PageHeader, Section } from "@/components/ui";
-import { addDays, todayIso } from "@/lib/belgium";
+import { MONTHS_SHORT_NL, addDays, todayIso } from "@/lib/belgium";
 import { describePeriod, machineKey, summary } from "@/lib/contracts";
 import { machineLabel, machineSerial } from "@/lib/month";
 import { getStore } from "@/lib/store";
@@ -57,6 +57,11 @@ function ContractForm({ contract, clients, machines, clientId }: {
           <input type="checkbox" name="prorate" defaultChecked={contract ? contract.prorate : true} className="size-4 accent-brand-700" />
           Pro rata in a partial month
         </label>
+        {num("fixed_alt", "€ fixed in other months", "0.01", "Instead of the fixed amount, in the months ticked below")}
+        <label className="flex items-center gap-2 self-end pb-2 text-sm" title="Amounts follow the Belgian health index, every year from the anniversary">
+          <input type="checkbox" name="indexed" defaultChecked={contract?.indexed ?? false} className="size-4 accent-brand-700" />
+          Index yearly (health index)
+        </label>
         {num("fee_pct", "Transaction costs %", "0.01", "A % of the gross sales (incl. VAT), e.g. 0.9")}
         <div>
           <label className="label">Transaction costs are</label>
@@ -64,6 +69,18 @@ function ContractForm({ contract, clients, machines, clientId }: {
             <option value="payout">Deducted from the payout</option>
             <option value="invoice">On the commission invoice</option>
           </select>
+        </div>
+      </div>
+      <div>
+        <span className="label">Months with the other fixed amount (every year)</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {MONTHS_SHORT_NL.map((m, i) => (
+            <label key={m} className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" name="fixed_alt_months" value={i + 1} defaultChecked={contract?.fixed_alt_months?.includes(i + 1)}
+                     className="size-4 accent-brand-700" />
+              {m}
+            </label>
+          ))}
         </div>
       </div>
       {options.length > 1 && (

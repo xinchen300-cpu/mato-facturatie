@@ -21,11 +21,12 @@ function clientCopy(client: Client): Client {
 
 async function context(store: Store, period: string) {
   const { first, last } = monthBounds(period);
-  const [settings, catalog, clients, contracts, terminalSales, manual] = await Promise.all([
+  const [settings, catalog, clients, contracts, terminalSales, manual, healthIndex] = await Promise.all([
     store.settings(), store.catalog(), store.clients(), store.contracts(), store.salesDaily(first, last), store.manualSales(period),
+    store.healthIndex(),
   ]);
   const daily = applyManual(terminalSales, clients, manual, period);
-  return { settings, catalog, clients, contracts, daily, manual, first, last };
+  return { settings, catalog, clients, contracts, daily, manual, healthIndex, first, last };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;
@@ -96,7 +97,7 @@ export async function closeMonth(store: Store, period: string, clientIds: number
     const client = ctx.clients.find((c) => c.id === id);
     if (!client) continue;
     try {
-      const calc = compute(client, period, ctx.daily, ctx.contracts);
+      const calc = compute(client, period, ctx.daily, ctx.contracts, ctx.healthIndex);
       let invoice = invoices.find((i) => i.client_id === id) ?? null;
       const result: Made = { client: client.name, invoice: null, statement: null };
       if (calc.subtotal > 0 && !invoice) {

@@ -159,7 +159,11 @@ export async function saveContract(_: ActionState, form: FormData): Promise<Acti
       per_item: numOf(form, "per_item"), fixed_monthly: numOf(form, "fixed_monthly"), minimum_monthly: numOf(form, "minimum_monthly"),
       prorate: form.has("prorate"), machines: form.getAll("machines").map(String), notes: str(form, "notes"),
       fee_pct: numOf(form, "fee_pct"), fee_mode: str(form, "fee_mode") === "invoice" ? "invoice" : "payout",
+      fixed_alt: numOf(form, "fixed_alt"),
+      fixed_alt_months: [...new Set(form.getAll("fixed_alt_months").map(Number))].filter((m) => m >= 1 && m <= 12).sort((a, b) => a - b),
+      indexed: form.has("indexed"),
     };
+    if (values.fixed_alt_months.length && !values.fixed_alt) throw new Error("Fill in the other fixed amount for the ticked months.");
     if (values.pct < 0 || values.pct > 100) throw new Error("The % must be between 0 and 100.");
     if (values.fee_pct < 0 || values.fee_pct >= 100) throw new Error("The transaction costs % must be between 0 and 100.");
     if (id) await store.updateContract(id, values);
@@ -240,6 +244,24 @@ export async function sendDocuments(_: ActionState, form: FormData): Promise<Act
     messages.push(...errors);
     return messages.length ? messages : [info("Nothing to send: everything ticked was already sent.")];
   }, ["/month", "/invoices"]);
+}
+
+export async function saveHealthIndex(_: ActionState, form: FormData): Promise<ActionState> {
+  return guard(async () => {
+    const store = await ownerStore();
+    const values: Record<string, number> = {};
+    for (const [key, raw] of form.entries()) {
+      if (!key.startsWith("idx:")) continue;
+      const month = key.slice(4);
+      const text = String(raw).trim().replace(",", ".");
+      if (!text) continue;
+      const value = Number(text);
+      if (!/^\d{4}-\d{2}$/.test(month) || !Number.isFinite(value) || value <= 0) throw new Error(`Health index for ${month} is not a number.`);
+      values[month] = Math.round(value * 100) / 100;
+    }
+    await store.saveHealthIndex(values);
+    return [ok(`Health index saved (${Object.keys(values).length} month(s)).`)];
+  }, ["/settings", "/month", "/"]);
 }
 
 export async function saveManualSales(_: ActionState, form: FormData): Promise<ActionState> {

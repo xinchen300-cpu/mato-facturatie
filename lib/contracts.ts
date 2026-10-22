@@ -3,7 +3,10 @@
 // sales, an amount per item sold, a fixed amount per month and a monthly minimum. Only the days of the month on
 // which a contract runs count; the fixed amount and the minimum go pro rata when asked.
 
-import { daysBetween, fmtDate, fmtEur, fmtPct, monthBounds, percentOf, periodLabel, roundMoney, sumMoney } from "./belgium";
+import {
+  MONTHS_SHORT_NL, daysBetween, fmtDate, fmtEur, fmtNum, fmtPct, monthBounds, nextPeriod, percentOf, periodLabel, previousPeriod,
+  roundMoney, sumMoney,
+} from "./belgium";
 import type { Calc, Client, Contract, ContractResult, DailyRow, InvoiceLine, ManualSales } from "./types";
 
 export const machineKey = (row: { owner: string; machine_id: string }) => `${row.owner}@${row.machine_id}`;
@@ -19,12 +22,17 @@ export function summary(contract: Contract): string {
   const parts: string[] = [];
   if (contract.pct) parts.push(`${fmtPct(contract.pct)} of sales ${contract.base === "excl" ? "excl." : "incl."} VAT`);
   if (contract.per_item) parts.push(`${fmtEur(contract.per_item)}/item`);
-  if (contract.fixed_monthly) parts.push(`${fmtEur(contract.fixed_monthly)}/month`);
+  if (contract.fixed_monthly || contract.fixed_alt_months?.length) {
+    const alt = contract.fixed_alt_months?.length
+      ? ` (${fmtEur(contract.fixed_alt)} in ${contract.fixed_alt_months.map((m) => MONTHS_SHORT_NL[m - 1]).join(", ")})` : "";
+    parts.push(`${fmtEur(contract.fixed_monthly)}/month${alt}`);
+  }
   let text = parts.join(" + ") || "nothing to charge";
   if (contract.minimum_monthly) text += ` (min. ${fmtEur(contract.minimum_monthly)})`;
   if (contract.fee_pct) {
     text += ` · ${fmtPct(contract.fee_pct)} transaction costs ${contract.fee_mode === "invoice" ? "invoiced" : "from the payout"}`;
   }
+  if (contract.indexed) text += " · indexed yearly";
   if (contract.machines.length) text += ` · ${contract.machines.length} machine(s)`;
   return text;
 }
@@ -41,6 +49,24 @@ export const manualOwner = (clientId: number) => `manual:${clientId}`;
 /** The owners whose sales count for a client: its MATO Info owners, and its sales typed in by hand. */
 export function ownersOf(client: Client): Set<string> {
   return new Set([...client.owners, manualOwner(client.id)]);
+}
+
+/**
+ * Yearly indexation with the health index: the start index is the month before the contract starts; from the first
+ * whole month after each anniversary the amounts follow the index of the month before. Returns the months needed
+ * for a period: `current` is null before the first anniversary.
+ */
+export function indexMonths(contract: Pick<Contract, "indexed" | "starts_on">, period: string):
+  { base: string; current: string | null; since: string | null; first: string } | null {
+  if (!contract.indexed) return null;
+  const [year, month, day] = contract.starts_on.split("-").map(Number);
+  const anniversary = `${year + 1}-${String(month).padStart(2, "0")}`;
+  const first = day === 1 ? anniversary : nextPeriod(anniversary);
+  const base = previousPeriod(contract.starts_on.slice(0, 7));
+  if (period < first) return { base, current: null, since: null, first };
+  const firstMonth = Number(first.slice(5));
+  const since = `${Number(period.slice(5)) >= firstMonth ? period.slice(0, 4) : Number(period.slice(0, 4)) - 1}-${first.slice(5)}`;
+  return { base, current: previousPeriod(since), since, first };
 }
 
 /** Sales rows that belong to a client (by its MATO Info owners). */
@@ -64,7 +90,8 @@ export function applyManual(rows: DailyRow[], clients: Client[], manual: ManualS
   }))];
 }
 
-export function compute(client: Client, period: string, rows: DailyRow[], contracts: Contract[]): Calc {
+export function compute(client: Client, period: string, rows: DailyRow[], contracts: Contract[],
+                        healthIndex: Record<string, number> = {}): Calc {
   const { first, last, days: daysInMonth } = monthBounds(period);
   const own = contracts.filter((c) => c.client_id === client.id);
   const sales = clientRows(client, rows).filter((r) => r.day >= first && r.day <= last);
@@ -72,6 +99,7 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
   const maand = periodLabel(period);
   const lines: InvoiceLine[] = [];
   const details: ContractResult[] = [];
+  const indexMissing = new Set<string>();
 
   for (const contract of own) {
     const span = activeIn(contract, first, last);
@@ -92,13 +120,33 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     const spanText = partial ? `${fmtDate(lo)} - ${fmtDate(hi)}` : maand;
     const label = contract.name && own.length > 1 ? ` (${contract.name})` : "";
 
+    // Indexation: the amounts (not the percentages) follow the health index after each anniversary.
+    let indexFactor = 1;
+    let indexText = "";
+    const months = indexMonths(contract, period);
+    if (months?.current) {
+      const start = healthIndex[months.base];
+      const now = healthIndex[months.current];
+      if (start && now) {
+        indexFactor = now / start;
+        indexText = `geïndexeerd: gezondheidsindex ${fmtNum(now)} (${periodLabel(months.current)}) / ${fmtNum(start)} (${periodLabel(months.base)})`;
+      } else {
+        if (!start) indexMissing.add(months.base);
+        if (!now) indexMissing.add(months.current);
+      }
+    }
+    const index = (amount: number) => roundMoney(amount * indexFactor);
+    const monthNo = Number(period.slice(5));
+    const fixedBase = contract.fixed_alt_months?.includes(monthNo) ? Number(contract.fixed_alt || 0) : Number(contract.fixed_monthly || 0);
+    const perItem = Math.round(Number(contract.per_item || 0) * indexFactor * 10000) / 10000;
+
     const baseKind = contract.base === "excl" ? "excl" : "incl";
     const base = baseKind === "incl" ? salesTotal : roundMoney(salesTotal / (1 + Number(contract.sales_vat_pct || 0) / 100));
     const pctAmount = percentOf(base, Number(contract.pct || 0));
-    const itemAmount = roundMoney(items * Number(contract.per_item || 0));
+    const itemAmount = roundMoney(items * perItem);
     const factor = partial && contract.prorate ? days / daysInMonth : 1;
-    const fixed = roundMoney(Number(contract.fixed_monthly || 0) * factor);
-    const minimum = roundMoney(Number(contract.minimum_monthly || 0) * factor);
+    const fixed = roundMoney(index(fixedBase) * factor);
+    const minimum = roundMoney(index(Number(contract.minimum_monthly || 0)) * factor);
     const topup = minimum ? roundMoney(Math.max(0, minimum - pctAmount - itemAmount)) : 0;
     const feePct = Number(contract.fee_pct || 0);
     const feeMode = contract.fee_mode === "invoice" ? "invoice" : "payout";
@@ -115,13 +163,14 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     }
     if (contract.per_item) {
       lines.push({ description: `Vergoeding per verkoop ${spanText}${label}`,
-                   detail: `${items} verkopen × ${fmtEur(Number(contract.per_item))}`,
-                   quantity: items, unit_price: Number(contract.per_item), kind: "per_item" });
+                   detail: `${items} verkopen × ${fmtEur(perItem)}${indexText ? ` (${indexText})` : ""}`,
+                   quantity: items, unit_price: perItem, kind: "per_item" });
     }
-    if (contract.fixed_monthly) {
+    if (fixedBase) {
       const proRata = factor !== 1 ? ` (pro rata ${days}/${daysInMonth} dagen)` : "";
+      const indexed = indexText ? `${fmtEur(fixedBase)} ${indexText} = ${fmtEur(index(fixedBase))}` : "";
       lines.push({ description: `Vaste vergoeding ${spanText}${label}${proRata}`,
-                   detail: contract.pct || contract.per_item ? "" : detail, quantity: 1, unit_price: fixed, kind: "fixed" });
+                   detail: indexed || (contract.pct || contract.per_item ? "" : detail), quantity: 1, unit_price: fixed, kind: "fixed" });
     }
     if (topup) {
       lines.push({ description: `Aanvulling tot minimum ${fmtEur(minimum)} ${spanText}${label}`,
@@ -136,7 +185,7 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
       contract_id: contract.id, name: contract.name, from: lo, to: hi, sales_total: salesTotal, items,
       base_kind: baseKind, base, pct: Number(contract.pct || 0), pct_amount: pctAmount,
       per_item: Number(contract.per_item || 0), item_amount: itemAmount, fixed, minimum, topup,
-      fee_pct: feePct, fee, fee_mode: feeMode, summary: summary(contract),
+      fee_pct: feePct, fee, fee_mode: feeMode, index_factor: indexFactor, summary: summary(contract),
     });
   }
 
@@ -155,6 +204,7 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     uncovered_items: uncovered.reduce((acc, r) => acc + Number(r.items), 0),
     fee_deducted: feeDeducted,
     payout: roundMoney(salesTotal - feeDeducted),
+    index_missing: [...indexMissing].sort(),
     deal: details.map((d) => d.summary).join(" | "),
   };
 }

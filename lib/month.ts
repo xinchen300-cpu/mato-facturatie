@@ -1,7 +1,7 @@
 // The month at a glance: per client the sales (= payout), the commission over their contracts, the documents,
 // and what still needs attention. Also creates a client for every MATO Info owner that sells and has none yet.
 
-import { monthBounds, percentOf, roundMoney, sumMoney } from "./belgium";
+import { monthBounds, percentOf, periodLabel, roundMoney, sumMoney } from "./belgium";
 import { activeIn, applyManual, compute, ownersOf } from "./contracts";
 import type { Store } from "./store/types";
 import type { Calc, Catalog, Client, Contract, DailyRow, Invoice, ManualSales, Statement } from "./types";
@@ -93,9 +93,9 @@ export type Overview = {
 
 export async function loadOverview(store: Store, period: string): Promise<Overview> {
   const { first, last } = monthBounds(period);
-  const [catalog, terminalSales, settings, contracts, invoices, statements, clientList, manual] = await Promise.all([
+  const [catalog, terminalSales, settings, contracts, invoices, statements, clientList, manual, healthIndex] = await Promise.all([
     store.catalog(), store.salesDaily(first, last), store.settings(), store.contracts(),
-    store.invoices({ period }), store.statements({ period }), store.clients(), store.manualSales(period),
+    store.invoices({ period }), store.statements({ period }), store.clients(), store.manualSales(period), store.healthIndex(),
   ]);
   const clients = await ensureClients(store, catalog, terminalSales, clientList);
   const daily = applyManual(terminalSales, clients, manual, period);
@@ -107,7 +107,7 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
   for (const client of clients.filter((c) => c.active)) {
     const own = contracts.filter((c) => c.client_id === client.id);
     const running = own.filter((c) => activeIn(c, first, last));
-    const calc = compute(client, period, daily, contracts);
+    const calc = compute(client, period, daily, contracts, healthIndex);
     const invoice = invoices.find((i) => i.client_id === client.id) ?? null;
     const statement = statements.find((s) => s.client_id === client.id) ?? null;
     const typed = manual.find((m) => m.client_id === client.id) ?? null;
@@ -121,6 +121,9 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     if (calc.subtotal && !client.vat_number) issues.push("no VAT number");
     if (calc.subtotal && (!client.street || !client.city)) issues.push("address incomplete");
     if (calc.sales_total && !client.iban) issues.push("no IBAN for payout");
+    if (calc.index_missing.length) {
+      issues.push(`health index of ${calc.index_missing.map(periodLabel).join(", ")} missing (Settings): not indexed`);
+    }
     if (typed && running.length > 1) issues.push(`own figure counts under the contract running on ${last.slice(8)}/${last.slice(5, 7)}`);
     if (typed && !typed.items && running.some((c) => c.per_item)) issues.push("own figure has no number of sales (€ per item)");
     for (const [doc, name] of [[invoice, "invoice"], [statement, "afrekening"]] as const) {

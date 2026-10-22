@@ -1,7 +1,8 @@
-import { saveSettings, testBillit, testEmail } from "@/app/actions";
+import { saveHealthIndex, saveSettings, testBillit, testEmail } from "@/app/actions";
 import { ActionForm, Submit } from "@/components/client";
 import { PageHeader, Section } from "@/components/ui";
-import { todayIso } from "@/lib/belgium";
+import { currentPeriod, periodLabel, previousPeriod, todayIso } from "@/lib/belgium";
+import { indexMonths } from "@/lib/contracts";
 import { nextNumberPreview } from "@/lib/invoicing";
 import { ownMachines } from "@/lib/month";
 import { getStore } from "@/lib/store";
@@ -30,7 +31,21 @@ function Check({ s, name, label }: { s: Settings; name: keyof Settings; label: s
 
 export default async function SettingsPage() {
   const store = await getStore();
-  const [s, catalog] = await Promise.all([store.settings(), store.catalog()]);
+  const [s, catalog, contracts, clients, healthIndex] = await Promise.all([
+    store.settings(), store.catalog(), store.contracts(), store.clients(), store.healthIndex(),
+  ]);
+  // The health index months the indexed contracts need, up to this month, and when each is indexed next.
+  const now = currentPeriod();
+  const indexed = contracts.filter((c) => c.indexed && (!c.ends_on || c.ends_on.slice(0, 7) >= now));
+  const needed = new Set<string>();
+  const plans = indexed.map((c) => {
+    const at = indexMonths(c, now)!;
+    needed.add(at.base);
+    if (at.current) needed.add(at.current);
+    const next = at.since ? `${Number(at.since.slice(0, 4)) + 1}${at.since.slice(4)}` : at.first;
+    return { contract: c, client: clients.find((x) => x.id === c.client_id)?.name ?? "", base: at.base, next };
+  });
+  const indexMonthsShown = [...new Set([...needed, ...Object.keys(healthIndex)])].sort().reverse();
   const mine = ownMachines(s.own_machines);
   // Machines without a business in MATO Info can be yours; ones already ticked stay listed.
   const candidates = catalog.machines.filter((m) => (!m.business_id && !m.shared_business_id) || mine.has(m.id));
@@ -141,6 +156,42 @@ export default async function SettingsPage() {
           <Submit>Save</Submit>
         </ActionForm>
         <ActionForm action={testEmail} className="mt-4"><Submit className="btn-secondary">Send a test e-mail to myself</Submit></ActionForm>
+      </Section>
+
+      <Section title="Health index (gezondheidsindex)">
+        <p className="mb-4 max-w-3xl text-sm text-slate-600">
+          Contracts marked &ldquo;index yearly&rdquo; follow the Belgian health index: the start index is the month before the
+          contract started; from each anniversary the amounts follow the index of the month before. Fill in the values
+          published by{" "}
+          <a className="text-brand-700 underline" href="https://statbel.fgov.be/nl/themas/consumptieprijsindex/gezondheidsindex" target="_blank" rel="noreferrer">Statbel</a>{" "}
+          (base 2013 = 100). Close the month warns when one is missing.
+        </p>
+        {plans.length > 0 && (
+          <ul className="mb-4 space-y-1 text-sm">
+            {plans.map((p) => (
+              <li key={p.contract.id}>
+                <span className="font-medium">{p.client}</span>: start index {periodLabel(p.base)}, next indexation{" "}
+                {periodLabel(p.next)} (index of {periodLabel(previousPeriod(p.next))})
+              </li>
+            ))}
+          </ul>
+        )}
+        {indexMonthsShown.length ? (
+          <ActionForm action={saveHealthIndex} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {indexMonthsShown.map((m) => (
+                <div key={m}>
+                  <label className="label" htmlFor={`idx-${m}`}>{periodLabel(m)}</label>
+                  <input className="input" id={`idx-${m}`} name={`idx:${m}`} inputMode="decimal" placeholder={needed.has(m) ? "needed" : ""}
+                         defaultValue={healthIndex[m] ? String(healthIndex[m]) : ""} />
+                </div>
+              ))}
+            </div>
+            <Submit>Save</Submit>
+          </ActionForm>
+        ) : (
+          <p className="text-sm text-slate-500">No contract is indexed yet.</p>
+        )}
       </Section>
 
       <Section title="Your own machines">

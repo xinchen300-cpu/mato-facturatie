@@ -131,6 +131,11 @@ export type Contract = {
   fee_pct: number;
   /** "payout": deducted from what you pay out; "invoice": a line on the commission invoice. */
   fee_mode: "payout" | "invoice";
+  /** Another fixed amount in these months (1-12) of every year, instead of fixed_monthly. */
+  fixed_alt: number;
+  fixed_alt_months: number[];
+  /** Amounts indexed every year with the health index (from the month before the start). */
+  indexed: boolean;
 };
 
 /** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */
@@ -237,6 +242,8 @@ export type ContractResult = {
   fee_pct: number;
   fee: number;
   fee_mode: "payout" | "invoice";
+  /** Health index now / at the start; 1 when not (yet) indexed. */
+  index_factor: number;
   summary: string;
 };
 
@@ -253,5 +260,7 @@ export type Calc = {
   fee_deducted: number;
   /** What you pay out: the sales minus the transaction costs deducted from them. */
   payout: number;
+  /** Health index months an indexed contract needs but that are not filled in (Settings). */
+  index_missing: string[];
   deal: string;
 };

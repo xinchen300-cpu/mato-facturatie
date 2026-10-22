@@ -53,7 +53,8 @@ function toContract(row: Record<string, unknown>): Contract {
     ...(row as unknown as Contract),
     pct: num(row.pct), sales_vat_pct: num(row.sales_vat_pct), per_item: num(row.per_item),
     fixed_monthly: num(row.fixed_monthly), minimum_monthly: num(row.minimum_monthly), fee_pct: num(row.fee_pct),
-    fee_mode: row.fee_mode === "invoice" ? "invoice" : "payout",
+    fee_mode: row.fee_mode === "invoice" ? "invoice" : "payout", fixed_alt: num(row.fixed_alt),
+    fixed_alt_months: ((row.fixed_alt_months as number[] | null) ?? []).map(Number), indexed: Boolean(row.indexed),
   };
 }
 
@@ -116,6 +117,16 @@ export class SupabaseStore implements Store {
 
   async deleteContract(id: number) {
     check(await this.db.from("fact_contracts").delete().eq("id", id).eq("org_id", this.orgId));
+  }
+
+  async healthIndex() {
+    const rows = check(await this.db.from("fact_health_index").select("month, value").eq("org_id", this.orgId)) as Record<string, unknown>[];
+    return Object.fromEntries(rows.map((r) => [String(r.month), num(r.value)]));
+  }
+
+  async saveHealthIndex(values: Record<string, number>) {
+    const rows = Object.entries(values).map(([month, value]) => ({ org_id: this.orgId, month, value, updated_at: new Date().toISOString() }));
+    if (rows.length) check(await this.db.from("fact_health_index").upsert(rows));
   }
 
   async manualSales(period?: string) {

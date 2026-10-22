@@ -52,7 +52,8 @@ function toContract(row: Record<string, unknown>): Contract {
   return {
     ...(row as unknown as Contract),
     pct: num(row.pct), sales_vat_pct: num(row.sales_vat_pct), per_item: num(row.per_item),
-    fixed_monthly: num(row.fixed_monthly), minimum_monthly: num(row.minimum_monthly),
+    fixed_monthly: num(row.fixed_monthly), minimum_monthly: num(row.minimum_monthly), fee_pct: num(row.fee_pct),
+    fee_mode: row.fee_mode === "invoice" ? "invoice" : "payout",
   };
 }
 

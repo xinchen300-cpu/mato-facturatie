@@ -57,6 +57,14 @@ function ContractForm({ contract, clients, machines, clientId }: {
           <input type="checkbox" name="prorate" defaultChecked={contract ? contract.prorate : true} className="size-4 accent-brand-700" />
           Pro rata in a partial month
         </label>
+        {num("fee_pct", "Transaction costs %", "0.01", "A % of the gross sales (incl. VAT), e.g. 0.9")}
+        <div>
+          <label className="label">Transaction costs are</label>
+          <select className="input" name="fee_mode" defaultValue={contract?.fee_mode ?? "payout"}>
+            <option value="payout">Deducted from the payout</option>
+            <option value="invoice">On the commission invoice</option>
+          </select>
+        </div>
       </div>
       {options.length > 1 && (
         <div>
@@ -105,7 +113,8 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
       <PageHeader title="Contracts" />
       <p className="-mt-3 mb-6 max-w-3xl text-sm text-slate-600">
         What you charge each client. A contract can combine a <strong>%</strong> of sales, an amount <strong>per item</strong>,
-        a <strong>fixed amount per month</strong> and a <strong>monthly minimum</strong>. When a deal changes, give the old
+        a <strong>fixed amount per month</strong> and a <strong>monthly minimum</strong>, plus <strong>transaction costs</strong>{" "}
+        (a % of the sales) that you either deduct from the payout or put on the invoice. When a deal changes, give the old
         contract an end date and add a new one: that month is split exactly at the date.
       </p>
       <Section title="Add a contract">

@@ -18,7 +18,7 @@ const client = (id: number, owners: string[]): Client => ({
 });
 const contract = (terms: Partial<Contract>): Contract => ({
   id: 1, client_id: 1, name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl", sales_vat_pct: 6,
-  per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", ...terms,
+  per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", fee_pct: 0, fee_mode: "payout", ...terms,
 });
 const row = (day: string, revenue: number, items = 1, owner = "business:a", machine = "m1"): DailyRow =>
   ({ owner, machine_id: machine, day, items, revenue });
@@ -93,7 +93,12 @@ describe("month closing (demo store)", () => {
     const invoices = await store.invoices({ period: "2026-09" });
     const statements = await store.statements({ period: "2026-09" });
     expect(statements.length).toBe(overview.rows.filter((r) => r.calc.sales_total).length);
-    for (const s of statements) expect(s.payout).toBe(s.sales_total);
+    for (const s of statements) {
+      expect(s.payout).toBe(overview.rows.find((r) => r.client.id === s.client_id)!.calc.payout);
+      expect(s.payout).toBeLessThanOrEqual(s.sales_total);
+    }
+    const chens = overview.rows.find((r) => r.client.name === "Chens Garden")!;
+    expect(chens.calc.payout).toBeLessThan(chens.calc.sales_total);
 
     // Ledoux sells in two machines; her afrekening lists both with her slots
     const ledoux = overview.rows.find((r) => r.client.name === "Ledoux")!;
@@ -189,5 +194,45 @@ describe("own sales figures", () => {
     expect(statement.snapshot.products).toEqual([]);
     const pdf = await statementPdf(statement, statement.snapshot.company);
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});
+
+describe("transaction costs", () => {
+  const rows = [row("2026-10-02", 1000), row("2026-10-20", 234.56)];
+
+  it("come off the payout when the contract says so", () => {
+    const calc = compute(client(1, ["business:a"]), "2026-10", rows, [contract({ fixed_monthly: 650, fee_pct: 0.9 })]);
+    expect(calc.subtotal).toBe(650);
+    expect(calc.fee_deducted).toBe(11.11); // 0.9% of 1234.56 = 11.111
+    expect(calc.payout).toBe(1223.45);
+    expect(calc.lines.map((l) => l.kind)).toEqual(["fixed"]);
+  });
+
+  it("go on the invoice when the contract says so, and the payout stays full", () => {
+    const calc = compute(client(1, ["business:a"]), "2026-10", rows, [contract({ pct: 20, fee_pct: 0.9, fee_mode: "invoice" })]);
+    expect(calc.lines.map((l) => [l.kind, l.unit_price])).toEqual([["pct", 246.91], ["fee", 11.11]]);
+    expect(calc.subtotal).toBe(258.02);
+    expect(calc.payout).toBe(1234.56);
+  });
+
+  it("only count the days a contract runs", () => {
+    const calc = compute(client(1, ["business:a"]), "2026-10", rows,
+      [contract({ starts_on: "2026-10-10", pct: 20, fee_pct: 0.9, fee_mode: "invoice" })]);
+    expect(calc.uncovered_total).toBe(1000);
+    expect(calc.lines.find((l) => l.kind === "fee")!.unit_price).toBe(2.11);
+  });
+
+  it("end up on the afrekening and in the e-mail", async () => {
+    const store = MemoryStore.fresh();
+    const brood = (await store.clients()).find((c) => c.name === "Brood")!;
+    for (const c of (await store.contracts()).filter((c) => c.client_id === brood.id)) await store.deleteContract(c.id);
+    await store.insertContract({ ...contract({ fixed_monthly: 350, fee_pct: 0.9 }), client_id: brood.id });
+    await closeMonth(store, "2026-09", [brood.id], "2026-10-03");
+    const [statement] = await store.statements({ period: "2026-09", clientId: brood.id });
+    expect(statement.payout).toBe(be.roundMoney(statement.sales_total - be.percentOf(statement.sales_total, 0.9)));
+    const values = mailValues(brood, "2026-09", statement, null, await store.settings());
+    expect(values.uitbetaling).toBe(be.fmtEur(statement.payout));
+    expect(String(values.aftrek_zin)).toContain("transactiekosten");
+    expect((await statementPdf(statement, statement.snapshot.company)).subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

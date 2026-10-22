@@ -97,7 +97,8 @@ function seed(): Db {
   const id = (name: string) => clients.find((c) => c.name === name)!.id;
   const contract = (client: string, terms: Partial<Contract>): Contract => ({
     id: next++, client_id: id(client), name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl",
-    sales_vat_pct: 6, per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", ...terms,
+    sales_vat_pct: 6, per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "",
+    fee_pct: 0, fee_mode: "payout", ...terms,
   });
   return {
     settings: {
@@ -111,12 +112,12 @@ function seed(): Db {
     clients,
     contracts: [
       contract("Brood", { name: "Commissie", pct: 15 }),
-      contract("Chens Garden", { name: "Maaltijden", pct: 20, base: "excl" }),
+      contract("Chens Garden", { name: "Maaltijden", pct: 20, base: "excl", fee_pct: 0.9 }),
       contract("ChocaBake", { name: "Huur + commissie", pct: 5, fixed_monthly: 150 }),
       contract("Drank Automaat", { name: "Per stuk", per_item: 0.25 }),
       contract("GreenBowl", { name: "Commissie met minimum", pct: 12, minimum_monthly: 100 }),
       contract("Hillewaere", { pct: 10 }),
-      contract("Istanbul", { pct: 10 }),
+      contract("Istanbul", { pct: 10, fee_pct: 0.9, fee_mode: "invoice" }),
       contract("Ledoux", { name: "Vakken", pct: 18 }),
       contract("SFERIO", { pct: 10 }),
       contract("Tallore", { name: "Oud contract", pct: 15, ends_on: "2026-09-15" }),

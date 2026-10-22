@@ -158,8 +158,10 @@ export async function saveContract(_: ActionState, form: FormData): Promise<Acti
       pct: numOf(form, "pct"), base: str(form, "base") === "excl" ? "excl" : "incl", sales_vat_pct: numOf(form, "sales_vat_pct") || 6,
       per_item: numOf(form, "per_item"), fixed_monthly: numOf(form, "fixed_monthly"), minimum_monthly: numOf(form, "minimum_monthly"),
       prorate: form.has("prorate"), machines: form.getAll("machines").map(String), notes: str(form, "notes"),
+      fee_pct: numOf(form, "fee_pct"), fee_mode: str(form, "fee_mode") === "invoice" ? "invoice" : "payout",
     };
     if (values.pct < 0 || values.pct > 100) throw new Error("The % must be between 0 and 100.");
+    if (values.fee_pct < 0 || values.fee_pct >= 100) throw new Error("The transaction costs % must be between 0 and 100.");
     if (id) await store.updateContract(id, values);
     else await store.insertContract(values);
     return [ok("Contract saved.")];

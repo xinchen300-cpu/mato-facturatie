@@ -4,7 +4,7 @@
 import PDFDocument from "pdfkit";
 
 import { fmtDate, fmtEur, fmtNum, fmtPct, formatIban, monthBounds, periodLabel, roundMoney } from "./belgium";
-import type { Client, Invoice, Settings, Statement } from "./types";
+import type { Calc, Client, Invoice, Settings, Statement } from "./types";
 
 const DARK = "#1c2126";
 const GREY = "#646b73";
@@ -217,6 +217,15 @@ export async function invoicePdf(invoice: Invoice, company: Company, client: Cli
 
 // ---------------------------------------------------------------- afrekening
 
+/** "Wij storten … aan u door", with the transaction costs taken off when the contract says so. */
+function payoutText(statement: Statement, calc: Calc): string {
+  const deducted = roundMoney(Number(statement.sales_total) - Number(statement.payout));
+  if (deducted <= 0) return `Wij storten de volledige omzet van ${fmtEur(statement.payout)} aan u door`;
+  const pcts = [...new Set((calc.contracts ?? []).filter((c) => c.fee_mode === "payout" && c.fee_pct).map((c) => fmtPct(c.fee_pct)))];
+  return `Omzet ${fmtEur(statement.sales_total)} min ${pcts.length ? `${pcts.join(" / ")} ` : ""}transactiekosten ` +
+    `(${fmtEur(deducted)}): wij storten ${fmtEur(statement.payout)} aan u door`;
+}
+
 export async function statementPdf(statement: Statement, company: Company): Promise<Buffer> {
   const accent = company.accent_color || "#0F766E";
   const snap = statement.snapshot;
@@ -247,11 +256,12 @@ export async function statementPdf(statement: Statement, company: Company): Prom
 
   // Payout
   const iban = client.iban ? ` op rekening ${formatIban(client.iban)}` : "";
-  doc.rect(M, y, CW, 40).fill(tint(accent, 0.92));
+  const payout = payoutText(statement, snap.calc) + `${iban}.`;
+  const box = 30 + doc.font("Helvetica").fontSize(9).heightOfString(payout, { width: CW - 24 });
+  doc.rect(M, y, CW, box).fill(tint(accent, 0.92));
   doc.font("Helvetica-Bold").fontSize(9).fillColor(accent).text("Uitbetaling", M + 12, y + 8);
-  doc.font("Helvetica").fontSize(9).fillColor(DARK)
-    .text(`Wij storten de volledige omzet van ${fmtEur(statement.payout)} aan u door${iban}.`, M + 12, y + 22, { width: CW - 24 });
-  doc.y = y + 48;
+  doc.font("Helvetica").fontSize(9).fillColor(DARK).text(payout, M + 12, y + 22, { width: CW - 24 });
+  doc.y = y + box + 8;
   if (snap.manual) {
     const source = snap.manual.note ? `de cijfers van ${snap.manual.note}` : "een eigen opgave";
     doc.font("Helvetica").fontSize(8).fillColor(GREY)

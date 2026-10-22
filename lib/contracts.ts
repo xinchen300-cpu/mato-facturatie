@@ -22,6 +22,9 @@ export function summary(contract: Contract): string {
   if (contract.fixed_monthly) parts.push(`${fmtEur(contract.fixed_monthly)}/month`);
   let text = parts.join(" + ") || "nothing to charge";
   if (contract.minimum_monthly) text += ` (min. ${fmtEur(contract.minimum_monthly)})`;
+  if (contract.fee_pct) {
+    text += ` · ${fmtPct(contract.fee_pct)} transaction costs ${contract.fee_mode === "invoice" ? "invoiced" : "from the payout"}`;
+  }
   if (contract.machines.length) text += ` · ${contract.machines.length} machine(s)`;
   return text;
 }
@@ -97,6 +100,9 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     const fixed = roundMoney(Number(contract.fixed_monthly || 0) * factor);
     const minimum = roundMoney(Number(contract.minimum_monthly || 0) * factor);
     const topup = minimum ? roundMoney(Math.max(0, minimum - pctAmount - itemAmount)) : 0;
+    const feePct = Number(contract.fee_pct || 0);
+    const feeMode = contract.fee_mode === "invoice" ? "invoice" : "payout";
+    const fee = percentOf(salesTotal, feePct);
 
     let detail = `Omzet ${spanText}: ${fmtEur(salesTotal)} incl. btw`;
     if (baseKind === "excl" && contract.pct) {
@@ -122,24 +128,33 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
                    detail: `Commissie ${fmtEur(pctAmount + itemAmount)} < minimum ${fmtEur(minimum)}`,
                    quantity: 1, unit_price: topup, kind: "minimum" });
     }
+    if (fee && feeMode === "invoice") {
+      lines.push({ description: `Transactiekosten ${fmtPct(feePct)} op omzet ${spanText}${label}`,
+                   detail: `Omzet ${fmtEur(salesTotal)} incl. btw`, quantity: 1, unit_price: fee, kind: "fee" });
+    }
     details.push({
       contract_id: contract.id, name: contract.name, from: lo, to: hi, sales_total: salesTotal, items,
       base_kind: baseKind, base, pct: Number(contract.pct || 0), pct_amount: pctAmount,
-      per_item: Number(contract.per_item || 0), item_amount: itemAmount, fixed, minimum, topup, summary: summary(contract),
+      per_item: Number(contract.per_item || 0), item_amount: itemAmount, fixed, minimum, topup,
+      fee_pct: feePct, fee, fee_mode: feeMode, summary: summary(contract),
     });
   }
 
   const kept = lines.filter((l) => roundMoney(l.quantity * l.unit_price) !== 0);
   const uncovered = sales.filter((_, i) => !covered.has(i));
+  const salesTotal = sumMoney(sales.map((r) => Number(r.revenue)));
+  const feeDeducted = sumMoney(details.filter((d) => d.fee_mode === "payout").map((d) => d.fee));
   return {
     period,
-    sales_total: sumMoney(sales.map((r) => Number(r.revenue))),
+    sales_total: salesTotal,
     items: sales.reduce((acc, r) => acc + Number(r.items), 0),
     lines: kept,
     subtotal: sumMoney(kept.map((l) => roundMoney(l.quantity * l.unit_price))),
     contracts: details,
     uncovered_total: sumMoney(uncovered.map((r) => Number(r.revenue))),
     uncovered_items: uncovered.reduce((acc, r) => acc + Number(r.items), 0),
+    fee_deducted: feeDeducted,
+    payout: roundMoney(salesTotal - feeDeducted),
     deal: details.map((d) => d.summary).join(" | "),
   };
 }

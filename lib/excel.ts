@@ -14,13 +14,14 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
   const sheet = book.addWorksheet("Maandoverzicht");
   sheet.columns = [
     { header: "Klant", key: "client", width: 28 }, { header: "Verkopen", key: "items", width: 10 },
-    { header: "Omzet (uit te betalen)", key: "sales", width: 22 }, { header: "Contract(en)", key: "deal", width: 45 },
+    { header: "Omzet", key: "sales", width: 14 }, { header: "Uit te betalen", key: "payout", width: 16 },
+    { header: "Contract(en)", key: "deal", width: 45 },
     { header: "Commissie excl. btw", key: "subtotal", width: 20 }, { header: "Btw", key: "vat", width: 12 },
     { header: "Commissie incl. btw", key: "total", width: 20 }, { header: "Factuur", key: "invoice", width: 14 },
     { header: "Opmerkingen", key: "issues", width: 45 },
   ];
   for (const r of overview.rows) {
-    sheet.addRow({ client: r.client.name, items: r.calc.items, sales: r.calc.sales_total, deal: r.calc.deal,
+    sheet.addRow({ client: r.client.name, items: r.calc.items, sales: r.calc.sales_total, payout: r.calc.payout, deal: r.calc.deal,
       subtotal: r.calc.subtotal, vat: r.vat, total: r.total, invoice: r.invoice?.number ?? "", issues: r.issues.join(", ") });
   }
 

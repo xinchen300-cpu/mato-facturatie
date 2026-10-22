@@ -78,7 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mail_body:
     "Beste {klant},\n\n" +
     "In bijlage vindt u de afrekening van uw verkopen in {maand}.\n\n" +
-    "Omzet {maand}: {omzet} ({verkopen} verkopen). Dit bedrag storten wij volledig aan u door.\n\n" +
+    "Omzet {maand}: {omzet} ({verkopen} verkopen). Wij storten u {uitbetaling} door{aftrek_zin}.\n\n" +
     "{factuur_zin}" +
     "Met vriendelijke groeten,\n" +
     "{bedrijf}",
@@ -127,6 +127,10 @@ export type Contract = {
   prorate: boolean;
   machines: string[];
   notes: string;
+  /** Transaction costs, a % of the gross sales (incl. VAT). */
+  fee_pct: number;
+  /** "payout": deducted from what you pay out; "invoice": a line on the commission invoice. */
+  fee_mode: "payout" | "invoice";
 };
 
 /** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */
@@ -230,6 +234,9 @@ export type ContractResult = {
   fixed: number;
   minimum: number;
   topup: number;
+  fee_pct: number;
+  fee: number;
+  fee_mode: "payout" | "invoice";
   summary: string;
 };
 
@@ -242,5 +249,9 @@ export type Calc = {
   contracts: ContractResult[];
   uncovered_total: number;
   uncovered_items: number;
+  /** Transaction costs deducted from the payout. */
+  fee_deducted: number;
+  /** What you pay out: the sales minus the transaction costs deducted from them. */
+  payout: number;
   deal: string;
 };

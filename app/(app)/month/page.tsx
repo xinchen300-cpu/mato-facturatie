@@ -120,7 +120,7 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
               <table className="table">
                 <thead>
                   <tr>
-                    <th><ToggleAll name="client" /></th><th>Client</th><th className="num">Sales = payout</th><th>Contract(s)</th>
+                    <th><ToggleAll name="client" /></th><th>Client</th><th className="num">Sales</th><th>Contract(s)</th>
                     <th className="num">Commission</th><th className="num">Incl. {overview.vatPct}% VAT</th><th>Invoice</th><th>Afrekening</th><th>Check</th>
                   </tr>
                 </thead>
@@ -139,6 +139,9 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                         </td>
                         <td className="num">
                           {fmtEur(r.calc.sales_total)}
+                          {r.calc.fee_deducted > 0 && (
+                            <div className="text-xs text-slate-500" title="After the transaction costs">payout {fmtEur(r.calc.payout)}</div>
+                          )}
                           {r.manual && <div title={r.manual.note}><Badge tone="sky">own figure</Badge></div>}
                         </td>
                         <td className="min-w-48 text-slate-600">{r.calc.deal || <span className="text-amber-700">no contract</span>}</td>

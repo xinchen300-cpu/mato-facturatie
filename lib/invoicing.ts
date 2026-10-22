@@ -107,7 +107,7 @@ export async function closeMonth(store: Store, period: string, clientIds: number
       if ((calc.sales_total || calc.subtotal) && existing?.email_status !== "sent") {
         await store.saveStatement({
           client_id: id, period, made_on: docDate, sales_total: calc.sales_total, items: calc.items,
-          payout: calc.sales_total, invoice_id: invoice?.id ?? null,
+          payout: calc.payout, invoice_id: invoice?.id ?? null,
           snapshot: await statementSnapshot(store, ctx, client, calc, invoice),
         }, existing?.id);
         result.statement = existing ? "rebuilt" : "made";
@@ -172,10 +172,13 @@ export async function sendPeppol(store: Store, invoiceId: number): Promise<strin
 export function mailValues(client: Client, period: string, statement: Statement | null, invoice: Invoice | null, settings: Settings) {
   const maand = periodLabel(period);
   const sales = statement?.sales_total ?? invoice?.sales_total ?? 0;
+  const payout = statement?.payout ?? sales;
+  const deducted = roundMoney(sales - payout);
   const values: Record<string, string | number> = {
     klant: client.name, maand, omzet: fmtEur(sales), verkopen: statement?.items ?? invoice?.items ?? 0,
-    uitbetaling: fmtEur(sales), bedrijf: settings.company_name, factuurnummer: "", bedrag: "", vervaldatum: "",
+    uitbetaling: fmtEur(payout), bedrijf: settings.company_name, factuurnummer: "", bedrag: "", vervaldatum: "",
     commissie: "", mededeling: "", factuur_zin: "",
+    aftrek_zin: deducted > 0 ? ` (na aftrek van ${fmtEur(deducted)} transactiekosten)` : "",
   };
   if (invoice) {
     Object.assign(values, {

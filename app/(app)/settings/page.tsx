@@ -134,7 +134,7 @@ export default async function SettingsPage() {
             <div className="sm:col-span-2">
               <label className="label" htmlFor="mail_body">Message</label>
               <textarea className="input font-mono" id="mail_body" name="mail_body" rows={10} defaultValue={s.mail_body} />
-              <p className="mt-1 text-xs text-slate-500">Placeholders: {"{klant} {maand} {omzet} {verkopen} {uitbetaling} {factuurnummer} {bedrag} {vervaldatum} {commissie} {mededeling} {bedrijf} {factuur_zin}"}</p>
+              <p className="mt-1 text-xs text-slate-500">Placeholders: {"{klant} {maand} {omzet} {verkopen} {uitbetaling} {aftrek_zin} {factuurnummer} {bedrag} {vervaldatum} {commissie} {mededeling} {bedrijf} {factuur_zin}"}</p>
             </div>
           </div>
           <Check s={s} name="smtp_bcc_self" label="Send me a copy (BCC) of every e-mail" />

@@ -1,25 +1,28 @@
 import { MonthPicker } from "@/components/client";
 import { Kpi, Notice, PageHeader, Section, TableWrap, TextLink } from "@/components/ui";
-import { addDays, fmtEur, fmtNum, lastCompletePeriod, monthBounds, periodLabel, previousPeriod, recentPeriods, roundMoney } from "@/lib/belgium";
+import { addDays, defaultPeriod, fmtEur, fmtNum, monthBounds, monthsFrom, periodLabel, previousPeriod, roundMoney } from "@/lib/belgium";
 import { loadOverview, totals } from "@/lib/month";
 import { getStore } from "@/lib/store";
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const { m } = await searchParams;
-  const periods = recentPeriods(24);
-  const period = m && periods.includes(m) ? m : lastCompletePeriod();
   const store = await getStore();
+  const settings = await store.settings();
+  // Nothing before the first month (Settings): no months to pick, no older sales in the chart.
+  const periods = monthsFrom(settings.start_period);
+  const period = m && periods.includes(m) ? m : defaultPeriod(settings.start_period);
   const prev = previousPeriod(period);
-  const yearStart = monthBounds(periods[11]).first;
-  const [overview, settings, contracts, history] = await Promise.all([
-    loadOverview(store, period), store.settings(), store.contracts(),
+  const shown = periods.slice(0, 12);
+  const yearStart = monthBounds(shown[shown.length - 1]).first;
+  const [overview, contracts, history] = await Promise.all([
+    loadOverview(store, period), store.contracts(),
     store.salesDaily(yearStart, addDays(monthBounds(periods[0]).last, 0)),
   ]);
   const sum = totals(overview.rows);
   const prevSales = roundMoney(history.filter((r) => r.day.startsWith(prev)).reduce((a, r) => a + Number(r.revenue), 0));
-  const delta = prevSales ? ((sum.sales - prevSales) / prevSales) * 100 : null;
+  const delta = prevSales && periods.includes(prev) ? ((sum.sales - prevSales) / prevSales) * 100 : null;
   const made = overview.rows.filter((r) => r.statement).length;
-  const months = periods.slice(0, 12).reverse().map((p) => ({
+  const months = [...shown].reverse().map((p) => ({
     period: p, revenue: roundMoney(history.filter((r) => r.day.startsWith(p)).reduce((a, r) => a + Number(r.revenue), 0)),
   }));
   const peak = Math.max(...months.map((x) => x.revenue), 1);

@@ -310,3 +310,15 @@ describe("extra charges", () => {
       expect.not.arrayContaining([expect.stringContaining("commission now")]));
   });
 });
+
+describe("first month", () => {
+  const today = new Date("2026-10-22T12:00:00Z");
+  it("offers no months before the first month and opens on it while it runs", () => {
+    expect(be.monthsFrom("2026-10", 24, today)).toEqual(["2026-10"]);
+    expect(be.defaultPeriod("2026-10", today)).toBe("2026-10");
+    expect(be.monthsFrom("", 3, today)).toEqual(["2026-10", "2026-09", "2026-08"]);
+    expect(be.defaultPeriod("", today)).toBe("2026-09");
+    expect(be.monthsFrom("2026-10", 24, new Date("2027-01-10T12:00:00Z"))).toEqual(["2027-01", "2026-12", "2026-11", "2026-10"]);
+    expect(be.defaultPeriod("2026-10", new Date("2027-01-10T12:00:00Z"))).toBe("2026-12");
+  });
+});

@@ -53,7 +53,7 @@ const SECTIONS: Record<string, { fields: (keyof Settings)[]; checkboxes?: (keyof
   company: { fields: ["company_name", "company_vat", "company_street", "company_zipcode", "company_city", "company_country",
                       "company_iban", "company_bic", "company_email", "company_phone", "company_website", "accent_color"] },
   invoices: { fields: ["invoice_prefix", "invoice_digits", "invoice_next_number", "invoice_vat_pct", "invoice_due_days",
-                       "invoice_vat_note", "invoice_footer"], checkboxes: ["invoice_use_year", "statement_list_sales"] },
+                       "invoice_vat_note", "invoice_footer", "start_period"], checkboxes: ["invoice_use_year", "statement_list_sales"] },
   billit: { fields: ["billit_env", "billit_api_key", "billit_party_id"], checkboxes: ["billit_attach_pdf"] },
   email: { fields: ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from_name", "smtp_from_email",
                     "mail_subject", "mail_body"], checkboxes: ["smtp_bcc_self"] },
@@ -77,6 +77,7 @@ export async function saveSettings(_: ActionState, form: FormData): Promise<Acti
       patch.own_machines = form.getAll("own_machines").map(String).join(",");
       patch.own_businesses = form.getAll("own_businesses").map(String).join(",");
     }
+    if (patch.start_period && !/^\d{4}-\d{2}$/.test(patch.start_period)) throw new Error("The first month must look like 2026-10.");
     if (patch.company_vat !== undefined) patch.company_vat = normalizeVat(patch.company_vat);
     if (patch.company_iban !== undefined) patch.company_iban = normalizeIban(patch.company_iban);
     if (patch.company_country !== undefined) patch.company_country = (patch.company_country || "BE").toUpperCase();

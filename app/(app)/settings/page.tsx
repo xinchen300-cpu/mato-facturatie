@@ -91,6 +91,7 @@ export default async function SettingsPage() {
             <div className="self-end pb-2"><Check s={s} name="invoice_use_year" label="Year in the number (2026-0001)" /></div>
             <Field s={s} name="invoice_vat_pct" label="VAT on your invoices (%)" type="number" />
             <Field s={s} name="invoice_due_days" label="Payment term (days)" type="number" />
+            <Field s={s} name="start_period" label="First month in the program" type="month" />
           </div>
           <p className="text-sm text-slate-600">Next invoice: <strong>{nextNumberPreview(s, todayIso())}</strong>. Continue your current series
             (last invoice 2026-0045 → next number 46). If you also invoice by hand in Billit, use a prefix such as COM- so each series stays unbroken.</p>

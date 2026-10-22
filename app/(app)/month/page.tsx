@@ -1,7 +1,7 @@
 import { deleteExtraLine, deleteManualSales, makeDocuments, saveExtraLine, saveManualSales, sendDocuments, setPaidOut } from "@/app/actions";
 import { ActionForm, MonthPicker, Submit, ToggleAll } from "@/components/client";
 import { Badge, Notice, PageHeader, Section, Status, TableWrap, TextLink } from "@/components/ui";
-import { currentPeriod, fmtDate, fmtEur, formatIban, lastCompletePeriod, periodLabel, recentPeriods, sumMoney, todayIso } from "@/lib/belgium";
+import { currentPeriod, defaultPeriod, fmtDate, fmtEur, formatIban, monthsFrom, periodLabel, sumMoney, todayIso } from "@/lib/belgium";
 import { nextNumberPreview } from "@/lib/invoicing";
 import { clientTerminals, loadOverview } from "@/lib/month";
 import { getStore } from "@/lib/store";
@@ -10,10 +10,11 @@ export const maxDuration = 60;
 
 export default async function MonthPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const { m } = await searchParams;
-  const periods = recentPeriods(24);
-  const period = m && periods.includes(m) ? m : lastCompletePeriod();
   const store = await getStore();
-  const [overview, settings, allInvoices] = await Promise.all([loadOverview(store, period), store.settings(), store.invoices()]);
+  const settings = await store.settings();
+  const periods = monthsFrom(settings.start_period);
+  const period = m && periods.includes(m) ? m : defaultPeriod(settings.start_period);
+  const [overview, allInvoices] = await Promise.all([loadOverview(store, period), store.invoices()]);
   const labels = Object.fromEntries(periods.map((p) => [p, periodLabel(p)]));
   const rows = [...overview.rows].sort((a, b) => a.client.name.localeCompare(b.client.name));
   const today = todayIso();

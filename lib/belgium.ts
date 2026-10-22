@@ -42,6 +42,19 @@ export function recentPeriods(count = 24, today = new Date()): string[] {
   return out;
 }
 
+/** The months to choose from, newest first, never before `first` ("YYYY-MM"; "" = no limit). */
+export function monthsFrom(first: string, count = 24, today = new Date()): string[] {
+  const months = recentPeriods(count, today).filter((p) => !first || p >= first);
+  return months.length ? months : [currentPeriod(today)];
+}
+
+/** The month a page opens on: the last finished month, or the first month when that is later. */
+export function defaultPeriod(first: string, today = new Date()): string {
+  const last = lastCompletePeriod(today);
+  const period = first && last < first ? first : last;
+  return period > currentPeriod(today) ? currentPeriod(today) : period;
+}
+
 export function monthBounds(period: string): { first: string; last: string; days: number } {
   const [y, m] = period.split("-").map(Number);
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();

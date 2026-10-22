@@ -40,6 +40,8 @@ export type Settings = {
   own_machines: string;
   /** MATO Info businesses (owner keys "business:<id>", comma-separated) whose products are your own. */
   own_businesses: string;
+  /** The first month the program works with ("YYYY-MM"): no months or sales before it. "" = no limit. */
+  start_period: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "{bedrijf}",
   own_machines: "",
   own_businesses: "",
+  start_period: "",
 };
 
 export type Catalog = {

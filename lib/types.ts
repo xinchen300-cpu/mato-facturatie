@@ -38,6 +38,8 @@ export type Settings = {
   mail_body: string;
   /** Machines (ids, comma-separated) that are your own: no afrekening, not reported as missing. */
   own_machines: string;
+  /** MATO Info businesses (owner keys "business:<id>", comma-separated) whose products are your own. */
+  own_businesses: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "Met vriendelijke groeten,\n" +
     "{bedrijf}",
   own_machines: "",
+  own_businesses: "",
 };
 
 export type Catalog = {

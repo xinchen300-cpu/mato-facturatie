@@ -4,7 +4,7 @@ import { PageHeader, Section } from "@/components/ui";
 import { currentPeriod, periodLabel, previousPeriod, todayIso } from "@/lib/belgium";
 import { indexMonths } from "@/lib/contracts";
 import { nextNumberPreview } from "@/lib/invoicing";
-import { ownMachines } from "@/lib/month";
+import { ownBusinesses, ownMachines } from "@/lib/month";
 import { getStore } from "@/lib/store";
 import type { Settings } from "@/lib/types";
 
@@ -47,6 +47,7 @@ export default async function SettingsPage() {
   });
   const indexMonthsShown = [...new Set([...needed, ...Object.keys(healthIndex)])].sort().reverse();
   const mine = ownMachines(s.own_machines);
+  const mineBusinesses = ownBusinesses(s.own_businesses);
   // Machines without a business in MATO Info can be yours; ones already ticked stay listed.
   const candidates = catalog.machines.filter((m) => (!m.business_id && !m.shared_business_id) || mine.has(m.id));
   return (
@@ -194,27 +195,43 @@ export default async function SettingsPage() {
         )}
       </Section>
 
-      <Section title="Your own machines">
-        <p className="mb-4 text-sm text-slate-600">
-          Machines that are yours, without a client. Their sales go on no afrekening and are not reported as missing on
-          Close the month. Only machines without a business in MATO Info are listed.
+      <Section title="Your own sales">
+        <p className="mb-4 max-w-3xl text-sm text-slate-600">
+          Products that are yours, without a client: a business in MATO Info that is really you (also on a shared machine),
+          or a machine without a business. Their sales go on no afrekening and are not reported as missing on Close the
+          month; they are listed there as your own.
         </p>
-        {candidates.length ? (
-          <ActionForm action={saveSettings} className="space-y-4">
-            <input type="hidden" name="section" value="own" />
-            <div className="grid gap-1 sm:grid-cols-2">
-              {candidates.map((m) => (
-                <label key={m.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="own_machines" value={m.id} defaultChecked={mine.has(m.id)} className="size-4 accent-brand-700" />
-                  {m.name} {m.serial && <span className="font-mono text-xs text-slate-500">{m.serial}</span>}
+        <ActionForm action={saveSettings} className="space-y-4">
+          <input type="hidden" name="section" value="own" />
+          <div>
+            <span className="label">Businesses in MATO Info that are your own products</span>
+            <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+              {catalog.businesses.map((b) => (
+                <label key={b.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="own_businesses" value={`business:${b.id}`} defaultChecked={mineBusinesses.has(`business:${b.id}`)}
+                         className="size-4 accent-brand-700" />
+                  {b.name}
                 </label>
               ))}
             </div>
-            <Submit>Save</Submit>
-          </ActionForm>
-        ) : (
-          <p className="text-sm text-slate-500">Every machine has a business in MATO Info.</p>
-        )}
+          </div>
+          <div>
+            <span className="label">Machines without a business that are yours</span>
+            {candidates.length ? (
+              <div className="grid gap-1 sm:grid-cols-2">
+                {candidates.map((m) => (
+                  <label key={m.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="own_machines" value={m.id} defaultChecked={mine.has(m.id)} className="size-4 accent-brand-700" />
+                    {m.name} {m.serial && <span className="font-mono text-xs text-slate-500">{m.serial}</span>}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Every machine has a business in MATO Info.</p>
+            )}
+          </div>
+          <Submit>Save</Submit>
+        </ActionForm>
       </Section>
 
       <Section title="Your data">

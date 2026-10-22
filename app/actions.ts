@@ -73,7 +73,10 @@ export async function saveSettings(_: ActionState, form: FormData): Promise<Acti
       patch[key] = key === "mail_body" ? String(form.get(key) ?? "") : str(form, key);
     }
     for (const key of section.checkboxes ?? []) patch[key] = form.has(key) ? "1" : "0";
-    if (str(form, "section") === "own") patch.own_machines = form.getAll("own_machines").map(String).join(",");
+    if (str(form, "section") === "own") {
+      patch.own_machines = form.getAll("own_machines").map(String).join(",");
+      patch.own_businesses = form.getAll("own_businesses").map(String).join(",");
+    }
     if (patch.company_vat !== undefined) patch.company_vat = normalizeVat(patch.company_vat);
     if (patch.company_iban !== undefined) patch.company_iban = normalizeIban(patch.company_iban);
     if (patch.company_country !== undefined) patch.company_country = (patch.company_country || "BE").toUpperCase();

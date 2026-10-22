@@ -273,3 +273,19 @@ describe("other months and yearly indexation", () => {
     expect(missing.lines[1].unit_price).toBe(180);
   });
 });
+
+describe("your own sales", () => {
+  it("leaves your own businesses out of the afrekeningen and does not report them as missing", async () => {
+    const store = MemoryStore.fresh();
+    const catalog = await store.catalog();
+    const hillewaere = `business:${catalog.businesses.find((b) => b.name === "Hillewaere")!.id}`;
+    await store.saveSettings({ own_businesses: hillewaere });
+    const client = (await store.clients()).find((c) => c.owners.includes(hillewaere))!;
+    await store.updateClient(client.id, { active: false });
+    const overview = await loadOverview(store, "2026-09");
+    expect(overview.rows.some((r) => r.client.id === client.id)).toBe(false);
+    expect(overview.unassigned).toEqual([]);
+    expect(overview.own.map((o) => o.label)).toEqual(["Hillewaere"]);
+    expect(overview.own[0].revenue).toBeGreaterThan(0);
+  });
+});

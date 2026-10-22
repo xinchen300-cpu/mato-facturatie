@@ -44,7 +44,7 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
       )}
       {overview.own.length > 0 && (
         <p className="mb-4 text-sm text-slate-500">
-          Your own machines (no afrekening): {overview.own.map((o) => `${o.label} ${fmtEur(o.revenue)}`).join(", ")}.
+          Your own sales (no afrekening): {overview.own.map((o) => `${o.label} ${fmtEur(o.revenue)}`).join(", ")}.
         </p>
       )}
 

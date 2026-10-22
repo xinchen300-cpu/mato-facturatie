@@ -5,7 +5,7 @@ import { fmtDate, fmtEur, monthBounds, normalizeVat, periodLabel, roundMoney, su
 import { BillitClient, BillitError, buildOrderPayload } from "./billit";
 import { applyManual, compute, machineKey, ownersOf } from "./contracts";
 import { render, sendMail, splitAddresses } from "./mailer";
-import { machineLabel, machineSerial } from "./month";
+import { machineLabel, machineSerial, ownBusinesses } from "./month";
 import { invoicePdf, statementPdf } from "./pdf";
 import type { Store } from "./store/types";
 import type { Calc, Client, Invoice, Settings, Statement, StatementSnapshot } from "./types";
@@ -26,7 +26,10 @@ async function context(store: Store, period: string) {
     store.healthIndex(),
   ]);
   const daily = applyManual(terminalSales, clients, manual, period);
-  return { settings, catalog, clients, contracts, daily, manual, healthIndex, first, last };
+  // Your own businesses (Settings) never count for a client.
+  const mine = ownBusinesses(settings.own_businesses);
+  const clientsNow = clients.map((c) => (c.owners.some((o) => mine.has(o)) ? { ...c, owners: c.owners.filter((o) => !mine.has(o)) } : c));
+  return { settings, catalog, clients: clientsNow, contracts, daily, manual, healthIndex, first, last };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;

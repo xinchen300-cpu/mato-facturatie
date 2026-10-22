@@ -42,14 +42,20 @@ export function clientTerminals(client: Client, catalog: Catalog, rows: DailyRow
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Your own machines (Settings): sales on them without a business go on no afrekening and are not missing. */
+/**
+ * Your own sales (Settings): machines without a business, and MATO Info businesses whose products are yours.
+ * They go on no afrekening and are not reported as missing.
+ */
 export function ownMachines(ownSetting: string): Set<string> {
-  return new Set(ownSetting.split(",").map((id) => id.trim()).filter(Boolean));
+  return new Set((ownSetting || "").split(",").map((id) => id.trim()).filter(Boolean));
 }
 
+export const ownBusinesses = ownMachines;
+
 /** Create a client for every owner that has sales but no client yet (first run, or a new business). */
-export async function ensureClients(store: Store, catalog: Catalog, rows: DailyRow[], clients: Client[]): Promise<Client[]> {
-  const known = new Set(clients.flatMap((c) => c.owners));
+export async function ensureClients(store: Store, catalog: Catalog, rows: DailyRow[], clients: Client[],
+                                    skip: Set<string> = new Set()): Promise<Client[]> {
+  const known = new Set([...clients.flatMap((c) => c.owners), ...skip]);
   const names = ownerNames(catalog);
   const missing = [...new Set(rows.map((r) => r.owner))].filter((o) => o !== "business:none" && !known.has(o));
   if (!missing.length) return clients;
@@ -97,7 +103,10 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     store.catalog(), store.salesDaily(first, last), store.settings(), store.contracts(),
     store.invoices({ period }), store.statements({ period }), store.clients(), store.manualSales(period), store.healthIndex(),
   ]);
-  const clients = await ensureClients(store, catalog, terminalSales, clientList);
+  const mineBusinesses = ownBusinesses(settings.own_businesses);
+  // Your own businesses never count for a client.
+  const clients = (await ensureClients(store, catalog, terminalSales, clientList, mineBusinesses))
+    .map((c) => (c.owners.some((o) => mineBusinesses.has(o)) ? { ...c, owners: c.owners.filter((o) => !mineBusinesses.has(o)) } : c));
   const daily = applyManual(terminalSales, clients, manual, period);
   const vatPct = Number(settings.invoice_vat_pct || 0);
   const owned = new Set(clients.filter((c) => c.active).flatMap((c) => [...ownersOf(c)]));
@@ -138,11 +147,14 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
   const mine = ownMachines(settings.own_machines);
   const machineName = (id: string) => catalog.machines.find((m) => m.id === id)?.name ?? id;
   const unassignedMap = new Map<string, { label: string; revenue: number }>();
-  const ownMap = new Map<string, number>();
+  const ownMap = new Map<string, { label: string; revenue: number }>();
   for (const r of daily) {
     if (owned.has(r.owner)) continue;
-    if (r.owner === "business:none" && mine.has(r.machine_id)) {
-      ownMap.set(r.machine_id, (ownMap.get(r.machine_id) ?? 0) + Number(r.revenue));
+    const ownKey = mineBusinesses.has(r.owner) ? r.owner : r.owner === "business:none" && mine.has(r.machine_id) ? r.machine_id : null;
+    if (ownKey) {
+      const entry = ownMap.get(ownKey) ?? { label: mineBusinesses.has(r.owner) ? names[r.owner] ?? r.owner : machineName(r.machine_id), revenue: 0 };
+      entry.revenue += Number(r.revenue);
+      ownMap.set(ownKey, entry);
       continue;
     }
     const key = r.owner === "business:none" ? `${r.owner}@${r.machine_id}` : r.owner;
@@ -152,7 +164,7 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     unassignedMap.set(key, entry);
   }
   const unassigned = [...unassignedMap.entries()].map(([owner, e]) => ({ owner, label: e.label, revenue: roundMoney(e.revenue) }));
-  const own = [...ownMap.entries()].map(([id, revenue]) => ({ label: machineName(id), revenue: roundMoney(revenue) }));
+  const own = [...ownMap.values()].map((e) => ({ label: e.label, revenue: roundMoney(e.revenue) }));
 
   return { period, rows, catalog, clients, contracts, daily, manual, unassigned, own, vatPct };
 }

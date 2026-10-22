@@ -1,0 +1,105 @@
+import { deleteClient, saveClient } from "@/app/actions";
+import { ActionForm, Submit } from "@/components/client";
+import { Badge, PageHeader, Section } from "@/components/ui";
+import { formatIban, ibanProblem, vatProblem } from "@/lib/belgium";
+import { ownerNames } from "@/lib/month";
+import { getStore } from "@/lib/store";
+import type { Client } from "@/lib/types";
+
+function ClientForm({ client, owners, taken }: { client?: Client; owners: [string, string][]; taken: Map<string, string> }) {
+  const field = (name: keyof Client, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" name={name} defaultValue={client ? String(client[name] ?? "") : name === "country" ? "BE" : ""} {...props} />
+    </div>
+  );
+  return (
+    <ActionForm action={saveClient} className="space-y-4">
+      {client && <input type="hidden" name="id" value={client.id} />}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {field("name", "Name", { required: true })}
+        {field("vat_number", "VAT number", { placeholder: "BE0123456789" })}
+        {field("iban", "IBAN (payout)", { placeholder: "BE68 5390 0754 7034" })}
+        {field("street", "Street + number")}
+        {field("zipcode", "Postcode")}
+        {field("city", "City")}
+        {field("country", "Country", { maxLength: 2 })}
+        {field("email", "Invoice e-mail", { placeholder: "boekhouding@...", type: "text" })}
+        {field("cc_email", "CC e-mail")}
+      </div>
+      <div>
+        <label className="label">Sales from MATO Info that count for this client</label>
+        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+          {owners.map(([key, name]) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="owners" value={key} defaultChecked={client?.owners.includes(key)} className="size-4 accent-brand-700" />
+              {name}
+              {taken.get(key) && taken.get(key) !== client?.name && <span className="text-xs text-slate-400">(now: {taken.get(key)})</span>}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <div>
+          <label className="label">Notes</label>
+          <input className="input" name="notes" defaultValue={client?.notes ?? ""} />
+        </div>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <input type="checkbox" name="active" defaultChecked={client ? client.active : true} className="size-4 accent-brand-700" /> Active
+        </label>
+      </div>
+      <Submit>{client ? "Save" : "Add client"}</Submit>
+    </ActionForm>
+  );
+}
+
+export default async function ClientsPage() {
+  const store = await getStore();
+  const [clients, catalog] = await Promise.all([store.clients(), store.catalog()]);
+  const names = ownerNames(catalog);
+  const owners = Object.entries(names).filter(([key]) => key !== "business:none").sort((a, b) => a[1].localeCompare(b[1]));
+  const taken = new Map(clients.flatMap((c) => c.owners.map((o) => [o, c.name] as const)));
+
+  return (
+    <>
+      <PageHeader title="Clients" />
+      <p className="-mt-3 mb-6 max-w-3xl text-sm text-slate-600">
+        The businesses whose sales you pay out and invoice commission to. A client is created automatically for every business and
+        partner with sales in MATO Info. Fill in their VAT number, address, e-mail and IBAN. If two MATO Info names are the same
+        business (e.g. SFERIO and Sferio), tick both on one client.
+      </p>
+      <Section title="Add a client">
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-brand-700">New client</summary>
+          <div className="mt-4"><ClientForm owners={owners} taken={taken} /></div>
+        </details>
+      </Section>
+      <div className="space-y-3">
+        {clients.map((client) => {
+          const issues = [vatProblem(client.vat_number), client.email ? null : "no e-mail", ibanProblem(client.iban),
+                          client.street && client.city ? null : "address incomplete", client.owners.length ? null : "no MATO Info sales linked"]
+            .filter(Boolean) as string[];
+          return (
+            <details key={client.id} className="card !p-0">
+              <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 sm:px-6">
+                <span className="font-medium">{client.name}</span>
+                {!client.active && <Badge>inactive</Badge>}
+                <span className="text-sm text-slate-500">{client.email}</span>
+                <span className="font-mono text-xs text-slate-500">{formatIban(client.iban)}</span>
+                {issues.length > 0 && client.active && <Badge tone="amber">{issues.length} to check</Badge>}
+              </summary>
+              <div className="border-t border-slate-100 p-4 sm:p-6">
+                {issues.length > 0 && <p className="mb-4 text-xs text-amber-800">{issues.join(" · ")}</p>}
+                <ClientForm client={client} owners={owners} taken={taken} />
+                <ActionForm action={deleteClient} className="mt-3">
+                  <input type="hidden" name="id" value={client.id} />
+                  <Submit className="text-xs text-red-700 underline" confirm={`Delete ${client.name}?`}>Delete client</Submit>
+                </ActionForm>
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </>
+  );
+}

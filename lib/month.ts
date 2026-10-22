@@ -2,9 +2,9 @@
 // and what still needs attention. Also creates a client for every MATO Info owner that sells and has none yet.
 
 import { monthBounds, percentOf, roundMoney, sumMoney } from "./belgium";
-import { activeIn, compute } from "./contracts";
+import { activeIn, applyManual, compute, ownersOf } from "./contracts";
 import type { Store } from "./store/types";
-import type { Calc, Catalog, Client, Contract, DailyRow, Invoice, Statement } from "./types";
+import type { Calc, Catalog, Client, Contract, DailyRow, Invoice, ManualSales, Statement } from "./types";
 
 export function ownerNames(catalog: Catalog): Record<string, string> {
   const names: Record<string, string> = {};
@@ -15,6 +15,7 @@ export function ownerNames(catalog: Catalog): Record<string, string> {
 }
 
 export function machineLabel(owner: string, machineId: string, catalog: Catalog): string {
+  if (machineId.startsWith("manual:")) return "Eigen opgave";
   const machine = catalog.machines.find((m) => m.id === machineId);
   if (!machine) return machineId;
   const own = owner === `business:${machine.business_id}` && !machine.shared_business_id;
@@ -41,6 +42,11 @@ export function clientTerminals(client: Client, catalog: Catalog, rows: DailyRow
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Your own machines (Settings): sales on them without a business go on no afrekening and are not missing. */
+export function ownMachines(ownSetting: string): Set<string> {
+  return new Set(ownSetting.split(",").map((id) => id.trim()).filter(Boolean));
+}
+
 /** Create a client for every owner that has sales but no client yet (first run, or a new business). */
 export async function ensureClients(store: Store, catalog: Catalog, rows: DailyRow[], clients: Client[]): Promise<Client[]> {
   const known = new Set(clients.flatMap((c) => c.owners));
@@ -65,6 +71,8 @@ export type OverviewRow = {
   total: number;
   invoice: Invoice | null;
   statement: Statement | null;
+  /** Sales typed in by hand for this month, replacing the MATO Info sales. */
+  manual: ManualSales | null;
   issues: string[];
 };
 
@@ -74,20 +82,25 @@ export type Overview = {
   catalog: Catalog;
   clients: Client[];
   contracts: Contract[];
+  /** The month's sales, with the figures typed in by hand applied. */
   daily: DailyRow[];
+  manual: ManualSales[];
   unassigned: { owner: string; label: string; revenue: number }[];
+  /** Sales on your own machines (no client). */
+  own: { label: string; revenue: number }[];
   vatPct: number;
 };
 
 export async function loadOverview(store: Store, period: string): Promise<Overview> {
   const { first, last } = monthBounds(period);
-  const [catalog, daily, settings, contracts, invoices, statements, clientList] = await Promise.all([
+  const [catalog, terminalSales, settings, contracts, invoices, statements, clientList, manual] = await Promise.all([
     store.catalog(), store.salesDaily(first, last), store.settings(), store.contracts(),
-    store.invoices({ period }), store.statements({ period }), store.clients(),
+    store.invoices({ period }), store.statements({ period }), store.clients(), store.manualSales(period),
   ]);
-  const clients = await ensureClients(store, catalog, daily, clientList);
+  const clients = await ensureClients(store, catalog, terminalSales, clientList);
+  const daily = applyManual(terminalSales, clients, manual, period);
   const vatPct = Number(settings.invoice_vat_pct || 0);
-  const owned = new Set(clients.filter((c) => c.active).flatMap((c) => c.owners));
+  const owned = new Set(clients.filter((c) => c.active).flatMap((c) => [...ownersOf(c)]));
   const names = ownerNames(catalog);
 
   const rows: OverviewRow[] = [];
@@ -97,8 +110,9 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     const calc = compute(client, period, daily, contracts);
     const invoice = invoices.find((i) => i.client_id === client.id) ?? null;
     const statement = statements.find((s) => s.client_id === client.id) ?? null;
+    const typed = manual.find((m) => m.client_id === client.id) ?? null;
     const hasFee = running.some((c) => c.fixed_monthly || c.minimum_monthly);
-    if (!calc.sales_total && !hasFee && !invoice && !statement) continue;
+    if (!calc.sales_total && !hasFee && !invoice && !statement && !typed) continue;
     const vat = percentOf(calc.subtotal, vatPct);
     const issues: string[] = [];
     if (calc.sales_total && !running.length) issues.push("no contract this month");
@@ -107,23 +121,37 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     if (calc.subtotal && !client.vat_number) issues.push("no VAT number");
     if (calc.subtotal && (!client.street || !client.city)) issues.push("address incomplete");
     if (calc.sales_total && !client.iban) issues.push("no IBAN for payout");
+    if (typed && running.length > 1) issues.push(`own figure counts under the contract running on ${last.slice(8)}/${last.slice(5, 7)}`);
+    if (typed && !typed.items && running.some((c) => c.per_item)) issues.push("own figure has no number of sales (€ per item)");
     for (const [doc, name] of [[invoice, "invoice"], [statement, "afrekening"]] as const) {
       if (doc && Math.abs(Number(doc.sales_total) - calc.sales_total) > 0.005) {
         issues.push(`sales changed since ${name} (was € ${Number(doc.sales_total).toFixed(2)})`);
       }
     }
-    rows.push({ client, calc, vat, total: roundMoney(calc.subtotal + vat), invoice, statement, issues });
+    rows.push({ client, calc, vat, total: roundMoney(calc.subtotal + vat), invoice, statement, manual: typed, issues });
   }
 
-  const unassignedMap = new Map<string, number>();
+  // Sales nobody gets an afrekening for. Machines without a business are named one by one; your own are listed apart.
+  const mine = ownMachines(settings.own_machines);
+  const machineName = (id: string) => catalog.machines.find((m) => m.id === id)?.name ?? id;
+  const unassignedMap = new Map<string, { label: string; revenue: number }>();
+  const ownMap = new Map<string, number>();
   for (const r of daily) {
-    if (!owned.has(r.owner)) unassignedMap.set(r.owner, (unassignedMap.get(r.owner) ?? 0) + Number(r.revenue));
+    if (owned.has(r.owner)) continue;
+    if (r.owner === "business:none" && mine.has(r.machine_id)) {
+      ownMap.set(r.machine_id, (ownMap.get(r.machine_id) ?? 0) + Number(r.revenue));
+      continue;
+    }
+    const key = r.owner === "business:none" ? `${r.owner}@${r.machine_id}` : r.owner;
+    const label = r.owner === "business:none" ? `${machineName(r.machine_id)} (no business in MATO Info)` : names[r.owner] ?? r.owner;
+    const entry = unassignedMap.get(key) ?? { label, revenue: 0 };
+    entry.revenue += Number(r.revenue);
+    unassignedMap.set(key, entry);
   }
-  const unassigned = [...unassignedMap.entries()].map(([owner, revenue]) => ({
-    owner, label: names[owner] ?? owner, revenue: roundMoney(revenue),
-  }));
+  const unassigned = [...unassignedMap.entries()].map(([owner, e]) => ({ owner, label: e.label, revenue: roundMoney(e.revenue) }));
+  const own = [...ownMap.entries()].map(([id, revenue]) => ({ label: machineName(id), revenue: roundMoney(revenue) }));
 
-  return { period, rows, catalog, clients, contracts, daily, unassigned, vatPct };
+  return { period, rows, catalog, clients, contracts, daily, manual, unassigned, own, vatPct };
 }
 
 export function totals(rows: OverviewRow[]) {

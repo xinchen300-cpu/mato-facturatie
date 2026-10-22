@@ -1,4 +1,4 @@
-import { makeDocuments, sendDocuments, setPaidOut } from "@/app/actions";
+import { deleteManualSales, makeDocuments, saveManualSales, sendDocuments, setPaidOut } from "@/app/actions";
 import { ActionForm, MonthPicker, Submit, ToggleAll } from "@/components/client";
 import { Badge, Notice, PageHeader, Section, Status, TableWrap, TextLink } from "@/components/ui";
 import { currentPeriod, fmtDate, fmtEur, formatIban, lastCompletePeriod, periodLabel, recentPeriods, sumMoney, todayIso } from "@/lib/belgium";
@@ -24,6 +24,8 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
   const hasMail = Boolean(settings.smtp_host);
   const payouts = rows.filter((r) => r.statement);
   const open = sumMoney(payouts.filter((r) => !r.statement!.paid_out).map((r) => Number(r.statement!.payout)));
+  const clientNames = new Map(overview.clients.map((c) => [c.id, c.name]));
+  const activeClients = overview.clients.filter((c) => c.active).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <>
@@ -40,6 +42,72 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
           Sales not on anyone&apos;s afrekening: {overview.unassigned.map((u) => `${u.label} (${fmtEur(u.revenue)})`).join(", ")}.
         </Notice>
       )}
+      {overview.own.length > 0 && (
+        <p className="mb-4 text-sm text-slate-500">
+          Your own machines (no afrekening): {overview.own.map((o) => `${o.label} ${fmtEur(o.revenue)}`).join(", ")}.
+        </p>
+      )}
+
+      <Section title="Own sales figures" aside={<span className="text-sm text-slate-500">Instead of MATO Info, for one month</span>}>
+        {overview.manual.length > 0 && (
+          <TableWrap>
+            <table className="table">
+              <thead>
+                <tr><th>Client</th><th className="num">Sales incl. VAT</th><th className="num">Number of sales</th><th>Source</th><th /></tr>
+              </thead>
+              <tbody>
+                {overview.manual.map((m) => (
+                  <tr key={m.id}>
+                    <td className="font-medium">{clientNames.get(m.client_id) ?? m.client_id}</td>
+                    <td className="num">{fmtEur(m.amount)}</td>
+                    <td className="num">{m.items}</td>
+                    <td>{m.note}</td>
+                    <td>
+                      <ActionForm action={deleteManualSales}>
+                        <input type="hidden" name="id" value={m.id} />
+                        <Submit className="text-xs text-red-700 underline" confirm="Remove this figure? The MATO Info sales count again.">Remove</Submit>
+                      </ActionForm>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+        <details className={overview.manual.length ? "mt-4" : ""}>
+          <summary className="cursor-pointer text-sm font-medium text-brand-700">Enter a client&apos;s sales yourself (e.g. from Televend)</summary>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            For a month in which MATO Info misses sales of a client, for example when a terminal was connected halfway through the
+            month. Your figure replaces all of that client&apos;s MATO Info sales for {periodLabel(period)}: in the commission, the
+            payout, the afrekening and the e-mail. The afrekening says the figures come from the source you fill in.
+          </p>
+          <ActionForm action={saveManualSales} className="mt-3">
+            <input type="hidden" name="period" value={period} />
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="label" htmlFor="m-client">Client</label>
+                <select className="input" id="m-client" name="client_id" defaultValue="" required>
+                  <option value="" disabled>Choose…</option>
+                  {activeClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="m-amount">Sales incl. VAT (€)</label>
+                <input className="input w-36" id="m-amount" name="amount" inputMode="decimal" placeholder="0,00" required />
+              </div>
+              <div>
+                <label className="label" htmlFor="m-items">Number of sales</label>
+                <input className="input w-28" id="m-items" name="items" type="number" min="0" step="1" defaultValue="0" />
+              </div>
+              <div>
+                <label className="label" htmlFor="m-note">Source</label>
+                <input className="input w-40" id="m-note" name="note" defaultValue="Televend" />
+              </div>
+              <Submit>Save figure</Submit>
+            </div>
+          </ActionForm>
+        </details>
+      </Section>
 
       <Section step="1" title="Afrekeningen and commission invoices"
                aside={<span className="text-sm text-slate-500">Sales come live from MATO Info</span>}>
@@ -69,7 +137,10 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                             {clientTerminals(r.client, overview.catalog, overview.daily).map((t) => t.serial).join(", ")}
                           </div>
                         </td>
-                        <td className="num">{fmtEur(r.calc.sales_total)}</td>
+                        <td className="num">
+                          {fmtEur(r.calc.sales_total)}
+                          {r.manual && <div title={r.manual.note}><Badge tone="sky">own figure</Badge></div>}
+                        </td>
                         <td className="min-w-48 text-slate-600">{r.calc.deal || <span className="text-amber-700">no contract</span>}</td>
                         <td className="num">{fmtEur(r.calc.subtotal)}</td>
                         <td className="num">{fmtEur(r.total)}</td>

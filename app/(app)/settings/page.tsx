@@ -3,6 +3,7 @@ import { ActionForm, Submit } from "@/components/client";
 import { PageHeader, Section } from "@/components/ui";
 import { todayIso } from "@/lib/belgium";
 import { nextNumberPreview } from "@/lib/invoicing";
+import { ownMachines } from "@/lib/month";
 import { getStore } from "@/lib/store";
 import type { Settings } from "@/lib/types";
 
@@ -28,7 +29,11 @@ function Check({ s, name, label }: { s: Settings; name: keyof Settings; label: s
 }
 
 export default async function SettingsPage() {
-  const s = await (await getStore()).settings();
+  const store = await getStore();
+  const [s, catalog] = await Promise.all([store.settings(), store.catalog()]);
+  const mine = ownMachines(s.own_machines);
+  // Machines without a business in MATO Info can be yours; ones already ticked stay listed.
+  const candidates = catalog.machines.filter((m) => (!m.business_id && !m.shared_business_id) || mine.has(m.id));
   return (
     <>
       <PageHeader title="Settings" />
@@ -136,6 +141,29 @@ export default async function SettingsPage() {
           <Submit>Save</Submit>
         </ActionForm>
         <ActionForm action={testEmail} className="mt-4"><Submit className="btn-secondary">Send a test e-mail to myself</Submit></ActionForm>
+      </Section>
+
+      <Section title="Your own machines">
+        <p className="mb-4 text-sm text-slate-600">
+          Machines that are yours, without a client. Their sales go on no afrekening and are not reported as missing on
+          Close the month. Only machines without a business in MATO Info are listed.
+        </p>
+        {candidates.length ? (
+          <ActionForm action={saveSettings} className="space-y-4">
+            <input type="hidden" name="section" value="own" />
+            <div className="grid gap-1 sm:grid-cols-2">
+              {candidates.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="own_machines" value={m.id} defaultChecked={mine.has(m.id)} className="size-4 accent-brand-700" />
+                  {m.name} {m.serial && <span className="font-mono text-xs text-slate-500">{m.serial}</span>}
+                </label>
+              ))}
+            </div>
+            <Submit>Save</Submit>
+          </ActionForm>
+        ) : (
+          <p className="text-sm text-slate-500">Every machine has a business in MATO Info.</p>
+        )}
       </Section>
 
       <Section title="Your data">

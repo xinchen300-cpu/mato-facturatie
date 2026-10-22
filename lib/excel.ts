@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 
 import { formatIban, periodLabel } from "./belgium";
+import { ownersOf } from "./contracts";
 import type { Overview } from "./month";
 import { machineLabel, machineSerial } from "./month";
 import type { Statement } from "./types";
@@ -43,7 +44,8 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
     { header: "Verkopen", key: "items", width: 10 }, { header: "Omzet", key: "revenue", width: 14 },
   ];
   const totals = new Map<string, { owner: string; machine: string; terminal: string; items: number; revenue: number }>();
-  const ownerClient = new Map(overview.clients.flatMap((c) => c.owners.map((o) => [o, c.name] as const)));
+  const ownerClient = new Map(overview.clients.flatMap((c) => [...ownersOf(c)].map((o) => [o, c.name] as const)));
+  ownerClient.set("business:none", "(geen klant)");
   for (const r of overview.daily) {
     const key = `${r.owner}@${r.machine_id}`;
     const row = totals.get(key) ?? {

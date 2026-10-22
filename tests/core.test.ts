@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import * as be from "@/lib/belgium";
 import { buildOrderPayload } from "@/lib/billit";
-import { compute } from "@/lib/contracts";
+import { applyManual, compute } from "@/lib/contracts";
 import { closeMonth, deleteInvoice, mailValues } from "@/lib/invoicing";
 import { render } from "@/lib/mailer";
 import { clientTerminals, loadOverview } from "@/lib/month";
@@ -151,5 +151,43 @@ describe("terminals per client", () => {
 
   it("skips machines without a terminal", () => {
     expect(clientTerminals(client(["business:b4"]), catalog, [])).toEqual([]);
+  });
+});
+
+describe("own sales figures", () => {
+  const manual = (amount: number, items = 0, clientId = 1, period = "2026-10") =>
+    ({ id: 9, client_id: clientId, period, amount, items, note: "Televend" });
+
+  it("replace the client's MATO Info sales of that month only", () => {
+    const rows = [row("2026-10-02", 100), row("2026-10-20", 40), row("2026-09-30", 70), row("2026-10-05", 25, 1, "business:b")];
+    const out = applyManual(rows, [client(1, ["business:a"])], [manual(500, 120)], "2026-10");
+    expect(out.filter((r) => r.owner === "business:a")).toEqual([row("2026-09-30", 70)]);
+    expect(out.filter((r) => r.owner === "business:b").length).toBe(1);
+    const calc = compute(client(1, ["business:a"]), "2026-10", out, [contract({ pct: 10, per_item: 0.1 })]);
+    expect(calc.sales_total).toBe(500);
+    expect(calc.items).toBe(120);
+    expect(calc.subtotal).toBe(62);
+  });
+
+  it("go on the afrekening with their source, without days or products", async () => {
+    const store = MemoryStore.fresh();
+    const zonde = (await store.clients()).find((c) => c.name === "Zoete Zonde")!;
+    await store.saveManualSales({ client_id: zonde.id, period: "2026-09", amount: 1234.5, items: 300, note: "Televend" });
+    const overview = await loadOverview(store, "2026-09");
+    const row = overview.rows.find((r) => r.client.id === zonde.id)!;
+    expect(row.calc.sales_total).toBe(1234.5);
+    expect(row.manual?.note).toBe("Televend");
+    expect(overview.unassigned).toEqual([]);
+
+    await closeMonth(store, "2026-09", [zonde.id], "2026-10-03");
+    const [statement] = await store.statements({ period: "2026-09", clientId: zonde.id });
+    expect(statement.sales_total).toBe(1234.5);
+    expect(statement.payout).toBe(1234.5);
+    expect(statement.snapshot.manual).toEqual({ note: "Televend" });
+    expect(statement.snapshot.machines).toEqual([{ label: "Eigen opgave (Televend)", terminal: "", items: 300, revenue: 1234.5 }]);
+    expect(statement.snapshot.daily).toEqual([]);
+    expect(statement.snapshot.products).toEqual([]);
+    const pdf = await statementPdf(statement, statement.snapshot.company);
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

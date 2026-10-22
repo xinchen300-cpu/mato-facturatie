@@ -4,7 +4,7 @@
 // which a contract runs count; the fixed amount and the minimum go pro rata when asked.
 
 import { daysBetween, fmtDate, fmtEur, fmtPct, monthBounds, percentOf, periodLabel, roundMoney, sumMoney } from "./belgium";
-import type { Calc, Client, Contract, ContractResult, DailyRow, InvoiceLine } from "./types";
+import type { Calc, Client, Contract, ContractResult, DailyRow, InvoiceLine, ManualSales } from "./types";
 
 export const machineKey = (row: { owner: string; machine_id: string }) => `${row.owner}@${row.machine_id}`;
 
@@ -32,10 +32,33 @@ export function describePeriod(contract: Contract): string {
     : `since ${fmtDate(contract.starts_on)}`;
 }
 
+/** Owner (and machine) of a client's sales typed in by hand. */
+export const manualOwner = (clientId: number) => `manual:${clientId}`;
+
+/** The owners whose sales count for a client: its MATO Info owners, and its sales typed in by hand. */
+export function ownersOf(client: Client): Set<string> {
+  return new Set([...client.owners, manualOwner(client.id)]);
+}
+
 /** Sales rows that belong to a client (by its MATO Info owners). */
 export function clientRows(client: Client, rows: DailyRow[]): DailyRow[] {
-  const owners = new Set(client.owners);
+  const owners = ownersOf(client);
   return rows.filter((r) => owners.has(r.owner));
+}
+
+/**
+ * The month's sales with the figures typed in by hand: for such a client its MATO Info sales of that month are
+ * replaced by one row with the typed total, on the last day of the month.
+ */
+export function applyManual(rows: DailyRow[], clients: Client[], manual: ManualSales[], period: string): DailyRow[] {
+  const { first, last } = monthBounds(period);
+  const entries = manual.filter((m) => m.period === period && clients.some((c) => c.id === m.client_id));
+  if (!entries.length) return rows;
+  const replaced = new Set(entries.flatMap((m) => clients.find((c) => c.id === m.client_id)!.owners));
+  const kept = rows.filter((r) => !(replaced.has(r.owner) && r.day >= first && r.day <= last));
+  return [...kept, ...entries.map((m) => ({
+    owner: manualOwner(m.client_id), machine_id: manualOwner(m.client_id), day: last, items: Number(m.items), revenue: Number(m.amount),
+  }))];
 }
 
 export function compute(client: Client, period: string, rows: DailyRow[], contracts: Contract[]): Calc {

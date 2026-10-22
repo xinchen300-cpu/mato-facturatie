@@ -3,7 +3,7 @@
 
 import { fmtDate, fmtEur, monthBounds, normalizeVat, periodLabel, roundMoney, sumMoney } from "./belgium";
 import { BillitClient, BillitError, buildOrderPayload } from "./billit";
-import { compute, machineKey } from "./contracts";
+import { applyManual, compute, machineKey, ownersOf } from "./contracts";
 import { render, sendMail, splitAddresses } from "./mailer";
 import { machineLabel, machineSerial } from "./month";
 import { invoicePdf, statementPdf } from "./pdf";
@@ -21,10 +21,11 @@ function clientCopy(client: Client): Client {
 
 async function context(store: Store, period: string) {
   const { first, last } = monthBounds(period);
-  const [settings, catalog, clients, contracts, daily] = await Promise.all([
-    store.settings(), store.catalog(), store.clients(), store.contracts(), store.salesDaily(first, last),
+  const [settings, catalog, clients, contracts, terminalSales, manual] = await Promise.all([
+    store.settings(), store.catalog(), store.clients(), store.contracts(), store.salesDaily(first, last), store.manualSales(period),
   ]);
-  return { settings, catalog, clients, contracts, daily, first, last };
+  const daily = applyManual(terminalSales, clients, manual, period);
+  return { settings, catalog, clients, contracts, daily, manual, first, last };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;
@@ -40,21 +41,25 @@ async function createInvoice(store: Store, ctx: Ctx, client: Client, period: str
 }
 
 async function statementSnapshot(store: Store, ctx: Ctx, client: Client, calc: Calc, invoice: Invoice | null): Promise<StatementSnapshot> {
-  const own = new Set(client.owners);
+  const own = ownersOf(client);
   const rows = ctx.daily.filter((r) => own.has(r.owner));
+  // Typed in by hand (e.g. from Televend): one total, no days, products or single sales.
+  const typed = ctx.manual.find((m) => m.client_id === client.id) ?? null;
+  const typedLabel = typed ? `Eigen opgave${typed.note ? ` (${typed.note})` : ""}` : "";
   const machines = new Map<string, { label: string; terminal: string; items: number; revenue: number }>();
   const days = new Map<string, number>();
   for (const r of rows) {
     const key = machineKey(r);
     const m = machines.get(key) ?? {
-      label: machineLabel(r.owner, r.machine_id, ctx.catalog), terminal: machineSerial(r.machine_id, ctx.catalog), items: 0, revenue: 0,
+      label: typed ? typedLabel : machineLabel(r.owner, r.machine_id, ctx.catalog),
+      terminal: machineSerial(r.machine_id, ctx.catalog), items: 0, revenue: 0,
     };
     m.items += Number(r.items);
     m.revenue = roundMoney(m.revenue + Number(r.revenue));
     machines.set(key, m);
-    days.set(r.day, roundMoney((days.get(r.day) ?? 0) + Number(r.revenue)));
+    if (!typed) days.set(r.day, roundMoney((days.get(r.day) ?? 0) + Number(r.revenue)));
   }
-  const detail = client.owners.length ? await store.salesDetail(ctx.first, ctx.last, client.owners) : [];
+  const detail = client.owners.length && !typed ? await store.salesDetail(ctx.first, ctx.last, client.owners) : [];
   const products = new Map<string, { product: string; items: number; revenue: number }>();
   for (const s of detail) {
     if (!s.product) continue;
@@ -75,6 +80,7 @@ async function statementSnapshot(store: Store, ctx: Ctx, client: Client, calc: C
                              slot: s.slot ?? "", product: s.product ?? "", amount: Number(s.amount) }))
       : null,
     invoice: invoice ? { number: invoice.number, total: invoice.total, due_date: invoice.due_date, payment_ref: invoice.payment_ref } : null,
+    manual: typed ? { note: typed.note } : null,
   };
 }
 

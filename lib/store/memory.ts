@@ -3,7 +3,7 @@
 
 import { addDays, ogm, percentOf, roundMoney } from "../belgium";
 import { DEFAULT_SETTINGS } from "../types";
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, Settings, Statement } from "../types";
+import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, Statement } from "../types";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 const ORG = "00000000-0000-0000-0000-00000000demo";
@@ -77,6 +77,7 @@ type Db = {
   contracts: Contract[];
   invoices: Invoice[];
   statements: Statement[];
+  manual: ManualSales[];
   sales: DetailRow[];
   next: number;
 };
@@ -124,6 +125,7 @@ function seed(): Db {
     ],
     invoices: [],
     statements: [],
+    manual: [],
     sales,
     next,
   };
@@ -188,6 +190,7 @@ export class MemoryStore implements Store {
   async deleteClient(id: number) {
     this.db.clients = this.db.clients.filter((c) => c.id !== id);
     this.db.contracts = this.db.contracts.filter((c) => c.client_id !== id);
+    this.db.manual = this.db.manual.filter((m) => m.client_id !== id);
   }
 
   async contracts() {
@@ -204,6 +207,20 @@ export class MemoryStore implements Store {
 
   async deleteContract(id: number) {
     this.db.contracts = this.db.contracts.filter((c) => c.id !== id);
+  }
+
+  async manualSales(period?: string) {
+    return this.db.manual.filter((m) => !period || m.period === period).map((m) => ({ ...m }));
+  }
+
+  async saveManualSales(input: Omit<ManualSales, "id">) {
+    const existing = this.db.manual.find((m) => m.client_id === input.client_id && m.period === input.period);
+    if (existing) Object.assign(existing, input);
+    else this.db.manual.push({ ...input, id: this.db.next++ });
+  }
+
+  async deleteManualSales(id: number) {
+    this.db.manual = this.db.manual.filter((m) => m.id !== id);
   }
 
   async salesDaily(from: string, to: string) {

@@ -36,6 +36,8 @@ export type Settings = {
   smtp_bcc_self: string;
   mail_subject: string;
   mail_body: string;
+  /** Machines (ids, comma-separated) that are your own: no afrekening, not reported as missing. */
+  own_machines: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "{factuur_zin}" +
     "Met vriendelijke groeten,\n" +
     "{bedrijf}",
+  own_machines: "",
 };
 
 export type Catalog = {
@@ -125,6 +128,9 @@ export type Contract = {
   machines: string[];
   notes: string;
 };
+
+/** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */
+export type ManualSales = { id: number; client_id: number; period: string; amount: number; items: number; note: string };
 
 /** Sales per owner, machine and day (from MATO Info). */
 export type DailyRow = { owner: string; machine_id: string; day: string; items: number; revenue: number };
@@ -183,6 +189,8 @@ export type StatementSnapshot = {
   company: Partial<Settings>;
   calc: Calc;
   machines: { label: string; terminal?: string; items: number; revenue: number }[];
+  /** Set when the sales were typed in by hand instead of read from MATO Info. */
+  manual?: { note: string } | null;
   products: { product: string; items: number; revenue: number }[];
   daily: { day: string; revenue: number }[];
   sales: { at: string; machine: string; slot: string; product: string; amount: number }[] | null;

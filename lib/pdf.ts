@@ -252,6 +252,12 @@ export async function statementPdf(statement: Statement, company: Company): Prom
   doc.font("Helvetica").fontSize(9).fillColor(DARK)
     .text(`Wij storten de volledige omzet van ${fmtEur(statement.payout)} aan u door${iban}.`, M + 12, y + 22, { width: CW - 24 });
   doc.y = y + 48;
+  if (snap.manual) {
+    const source = snap.manual.note ? `de cijfers van ${snap.manual.note}` : "een eigen opgave";
+    doc.font("Helvetica").fontSize(8).fillColor(GREY)
+      .text(`De omzet van deze maand is gebaseerd op ${source}, niet op de gegevens van de betaalterminal.`, M, doc.y, { width: CW });
+    doc.y += 6;
+  }
 
   if (snap.daily.length) {
     sectionTitle(doc, "Omzet per dag", accent);

@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 import { SUPABASE_KEY, SUPABASE_URL } from "../config";
 import { DEFAULT_SETTINGS } from "../types";
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, Settings, Statement } from "../types";
+import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, Statement } from "../types";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 export async function supabaseServer() {
@@ -115,6 +115,21 @@ export class SupabaseStore implements Store {
 
   async deleteContract(id: number) {
     check(await this.db.from("fact_contracts").delete().eq("id", id).eq("org_id", this.orgId));
+  }
+
+  async manualSales(period?: string) {
+    let query = this.db.from("fact_manual_sales").select("id, client_id, period, amount, items, note").eq("org_id", this.orgId);
+    if (period) query = query.eq("period", period);
+    const rows = check(await query.order("period")) as Record<string, unknown>[];
+    return rows.map((r) => ({ ...(r as unknown as ManualSales), amount: num(r.amount), items: num(r.items) }));
+  }
+
+  async saveManualSales(input: Omit<ManualSales, "id">) {
+    check(await this.db.from("fact_manual_sales").upsert({ ...input, org_id: this.orgId }, { onConflict: "client_id,period" }));
+  }
+
+  async deleteManualSales(id: number) {
+    check(await this.db.from("fact_manual_sales").delete().eq("id", id).eq("org_id", this.orgId));
   }
 
   async salesDaily(from: string, to: string) {

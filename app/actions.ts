@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { ActionState, Message } from "@/components/client";
-import { ibanProblem, normalizeIban, normalizeVat, periodLabel, todayIso, vatProblem } from "@/lib/belgium";
+import { fmtEur, ibanProblem, normalizeIban, normalizeVat, periodLabel, todayIso, vatProblem } from "@/lib/belgium";
 import { BillitClient } from "@/lib/billit";
 import { closeMonth, deleteInvoice, sendMonthEmail, sendPeppol } from "@/lib/invoicing";
 import { sendMail } from "@/lib/mailer";
@@ -57,6 +57,7 @@ const SECTIONS: Record<string, { fields: (keyof Settings)[]; checkboxes?: (keyof
   billit: { fields: ["billit_env", "billit_api_key", "billit_party_id"], checkboxes: ["billit_attach_pdf"] },
   email: { fields: ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from_name", "smtp_from_email",
                     "mail_subject", "mail_body"], checkboxes: ["smtp_bcc_self"] },
+  own: { fields: [] },
 };
 
 export async function saveSettings(_: ActionState, form: FormData): Promise<ActionState> {
@@ -72,6 +73,7 @@ export async function saveSettings(_: ActionState, form: FormData): Promise<Acti
       patch[key] = key === "mail_body" ? String(form.get(key) ?? "") : str(form, key);
     }
     for (const key of section.checkboxes ?? []) patch[key] = form.has(key) ? "1" : "0";
+    if (str(form, "section") === "own") patch.own_machines = form.getAll("own_machines").map(String).join(",");
     if (patch.company_vat !== undefined) patch.company_vat = normalizeVat(patch.company_vat);
     if (patch.company_iban !== undefined) patch.company_iban = normalizeIban(patch.company_iban);
     if (patch.company_country !== undefined) patch.company_country = (patch.company_country || "BE").toUpperCase();
@@ -236,6 +238,36 @@ export async function sendDocuments(_: ActionState, form: FormData): Promise<Act
     messages.push(...errors);
     return messages.length ? messages : [info("Nothing to send: everything ticked was already sent.")];
   }, ["/month", "/invoices"]);
+}
+
+export async function saveManualSales(_: ActionState, form: FormData): Promise<ActionState> {
+  return guard(async () => {
+    const store = await ownerStore();
+    const clientId = Number(str(form, "client_id"));
+    const period = str(form, "period");
+    const client = (await store.clients()).find((c) => c.id === clientId);
+    if (!client) throw new Error("Choose a client.");
+    if (!/^\d{4}-\d{2}$/.test(period)) throw new Error("Unknown month.");
+    const amount = Math.round(numOf(form, "amount") * 100) / 100;
+    const items = Math.round(numOf(form, "items"));
+    if (amount <= 0) throw new Error("Fill in the sales amount (incl. VAT).");
+    if (items < 0) throw new Error("The number of sales cannot be negative.");
+    await store.saveManualSales({ client_id: clientId, period, amount, items, note: str(form, "note") });
+    const [statement] = await store.statements({ period, clientId });
+    return [
+      ok(`${client.name}: ${periodLabel(period)} now uses your own figure (${fmtEur(amount)}) instead of the MATO Info sales.`),
+      ...(statement?.email_status === "sent"
+        ? [info("Its afrekening was already e-mailed and stays as it was.")]
+        : statement ? [info("Make the afrekening again (step 1) to use the new figure.")] : []),
+    ];
+  }, ["/month", "/"]);
+}
+
+export async function deleteManualSales(_: ActionState, form: FormData): Promise<ActionState> {
+  return guard(async () => {
+    await (await ownerStore()).deleteManualSales(Number(str(form, "id")));
+    return [ok("Own figure removed: the MATO Info sales count again.")];
+  }, ["/month", "/"]);
 }
 
 export async function setPaidOut(_: ActionState, form: FormData): Promise<ActionState> {

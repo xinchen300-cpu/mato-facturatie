@@ -1,4 +1,6 @@
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, InvoiceLine, Settings, Statement, StatementSnapshot } from "../types";
+import type {
+  Catalog, Client, Contract, DailyRow, DetailRow, Invoice, InvoiceLine, ManualSales, Settings, Statement, StatementSnapshot,
+} from "../types";
 
 export type NewInvoice = {
   clientId: number;
@@ -43,6 +45,11 @@ export interface Store {
   insertContract(contract: Omit<Contract, "id">): Promise<void>;
   updateContract(id: number, patch: Partial<Omit<Contract, "id">>): Promise<void>;
   deleteContract(id: number): Promise<void>;
+
+  /** Sales typed in by hand, per client and month (replace the MATO Info sales of that client and month). */
+  manualSales(period?: string): Promise<ManualSales[]>;
+  saveManualSales(input: Omit<ManualSales, "id">): Promise<void>;
+  deleteManualSales(id: number): Promise<void>;
 
   salesDaily(from: string, to: string): Promise<DailyRow[]>;
   salesDetail(from: string, to: string, owners: string[]): Promise<DetailRow[]>;

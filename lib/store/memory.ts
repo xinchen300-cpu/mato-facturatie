@@ -3,7 +3,7 @@
 
 import { addDays, ogm, percentOf, roundMoney } from "../belgium";
 import { DEFAULT_SETTINGS } from "../types";
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, Statement } from "../types";
+import type { Catalog, Client, Contract, DailyRow, DetailRow, ExtraLine, Invoice, ManualSales, Settings, Statement } from "../types";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 const ORG = "00000000-0000-0000-0000-00000000demo";
@@ -78,6 +78,7 @@ type Db = {
   invoices: Invoice[];
   statements: Statement[];
   manual: ManualSales[];
+  extras: ExtraLine[];
   healthIndex: Record<string, number>;
   sales: DetailRow[];
   next: number;
@@ -128,6 +129,7 @@ function seed(): Db {
     invoices: [],
     statements: [],
     manual: [],
+    extras: [],
     healthIndex: {},
     sales,
     next,
@@ -194,6 +196,7 @@ export class MemoryStore implements Store {
     this.db.clients = this.db.clients.filter((c) => c.id !== id);
     this.db.contracts = this.db.contracts.filter((c) => c.client_id !== id);
     this.db.manual = this.db.manual.filter((m) => m.client_id !== id);
+    this.db.extras = this.db.extras.filter((e) => e.client_id !== id);
   }
 
   async contracts() {
@@ -210,6 +213,18 @@ export class MemoryStore implements Store {
 
   async deleteContract(id: number) {
     this.db.contracts = this.db.contracts.filter((c) => c.id !== id);
+  }
+
+  async extraLines(period?: string) {
+    return this.db.extras.filter((e) => !period || e.period === period).map((e) => ({ ...e }));
+  }
+
+  async saveExtraLine(input: Omit<ExtraLine, "id">) {
+    this.db.extras.push({ ...input, id: this.db.next++ });
+  }
+
+  async deleteExtraLine(id: number) {
+    this.db.extras = this.db.extras.filter((e) => e.id !== id);
   }
 
   async slotRules() {

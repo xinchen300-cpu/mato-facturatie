@@ -7,7 +7,7 @@ import {
   MONTHS_SHORT_NL, daysBetween, fmtDate, fmtEur, fmtNum, fmtPct, monthBounds, nextPeriod, percentOf, periodLabel, previousPeriod,
   roundMoney, sumMoney,
 } from "./belgium";
-import type { Calc, Client, Contract, ContractResult, DailyRow, InvoiceLine, ManualSales } from "./types";
+import type { Calc, Client, Contract, ContractResult, DailyRow, ExtraLine, InvoiceLine, ManualSales } from "./types";
 
 export const machineKey = (row: { owner: string; machine_id: string }) => `${row.owner}@${row.machine_id}`;
 
@@ -208,4 +208,14 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     index_missing: [...indexMissing].sort(),
     deal: details.map((d) => d.summary).join(" | "),
   };
+}
+
+/** The month's calculation with the client's one-off charges added as invoice lines. */
+export function withExtras(calc: Calc, clientId: number, extras: ExtraLine[]): Calc {
+  const own = extras.filter((e) => e.client_id === clientId && e.period === calc.period);
+  if (!own.length) return calc;
+  const lines = [...calc.lines, ...own.map((e) => ({
+    description: e.description, detail: "", quantity: Number(e.quantity), unit_price: Number(e.unit_price), kind: "extra",
+  }))];
+  return { ...calc, lines, subtotal: sumMoney(lines.map((l) => roundMoney(l.quantity * l.unit_price))) };
 }

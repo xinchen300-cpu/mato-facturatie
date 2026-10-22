@@ -1,5 +1,5 @@
 import type {
-  Catalog, Client, Contract, DailyRow, DetailRow, Invoice, InvoiceLine, ManualSales, Settings, SlotRule, Statement, StatementSnapshot,
+  Catalog, Client, Contract, DailyRow, DetailRow, ExtraLine, Invoice, InvoiceLine, ManualSales, Settings, SlotRule, Statement, StatementSnapshot,
 } from "../types";
 
 export type NewInvoice = {
@@ -45,6 +45,11 @@ export interface Store {
   insertContract(contract: Omit<Contract, "id">): Promise<void>;
   updateContract(id: number, patch: Partial<Omit<Contract, "id">>): Promise<void>;
   deleteContract(id: number): Promise<void>;
+
+  /** One-off charges per client and month, added to the commission invoice. */
+  extraLines(period?: string): Promise<ExtraLine[]>;
+  saveExtraLine(input: Omit<ExtraLine, "id">): Promise<void>;
+  deleteExtraLine(id: number): Promise<void>;
 
   /** Slot ranges that belong to a business (used when the sales are counted). */
   slotRules(): Promise<SlotRule[]>;

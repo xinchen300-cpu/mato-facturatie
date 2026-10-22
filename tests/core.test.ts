@@ -289,3 +289,24 @@ describe("your own sales", () => {
     expect(overview.own[0].revenue).toBeGreaterThan(0);
   });
 });
+
+describe("extra charges", () => {
+  it("go on the commission invoice as their own lines", async () => {
+    const store = MemoryStore.fresh();
+    const tallore = (await store.clients()).find((c) => c.name === "Tallore")!;
+    await store.saveExtraLine({ client_id: tallore.id, period: "2026-09", description: "Eenmalige opstartkost", quantity: 1, unit_price: 200 });
+    await store.saveExtraLine({ client_id: tallore.id, period: "2026-09", description: "Configuratie (uur)", quantity: 1.5, unit_price: 60 });
+    await store.saveExtraLine({ client_id: tallore.id, period: "2026-10", description: "Andere maand", quantity: 1, unit_price: 99 });
+    const overview = await loadOverview(store, "2026-09");
+    const row = overview.rows.find((r) => r.client.id === tallore.id)!;
+    const extra = row.calc.lines.filter((l) => l.kind === "extra");
+    expect(extra.map((l) => [l.description, l.quantity, l.unit_price])).toEqual([["Eenmalige opstartkost", 1, 200], ["Configuratie (uur)", 1.5, 60]]);
+
+    await closeMonth(store, "2026-09", [tallore.id], "2026-10-03");
+    const [invoice] = await store.invoices({ period: "2026-09", clientId: tallore.id });
+    expect(invoice.subtotal).toBe(be.roundMoney(row.calc.subtotal));
+    expect(invoice.lines.some((l) => l.description === "Eenmalige opstartkost")).toBe(true);
+    expect((await loadOverview(store, "2026-09")).rows.find((r) => r.client.id === tallore.id)!.issues).toEqual(
+      expect.not.arrayContaining([expect.stringContaining("commission now")]));
+  });
+});

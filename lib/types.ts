@@ -147,6 +147,9 @@ export type Contract = {
 export type SlotRule = { id: number; machine_id: string; slot_from: number; slot_to: number; business_id: string;
   valid_from: string; valid_to: string | null; note: string };
 
+/** A one-off charge on a client's invoice for a month (start-up fee, configuration hours, parts). */
+export type ExtraLine = { id: number; client_id: number; period: string; description: string; quantity: number; unit_price: number };
+
 /** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */
 export type ManualSales = { id: number; client_id: number; period: string; amount: number; items: number; note: string };
 

@@ -2,9 +2,9 @@
 // and what still needs attention. Also creates a client for every MATO Info owner that sells and has none yet.
 
 import { monthBounds, percentOf, periodLabel, roundMoney, sumMoney } from "./belgium";
-import { activeIn, applyManual, compute, ownersOf } from "./contracts";
+import { activeIn, applyManual, compute, ownersOf, withExtras } from "./contracts";
 import type { Store } from "./store/types";
-import type { Calc, Catalog, Client, Contract, DailyRow, Invoice, ManualSales, Statement } from "./types";
+import type { Calc, Catalog, Client, Contract, DailyRow, ExtraLine, Invoice, ManualSales, Statement } from "./types";
 
 export function ownerNames(catalog: Catalog): Record<string, string> {
   const names: Record<string, string> = {};
@@ -91,6 +91,7 @@ export type Overview = {
   /** The month's sales, with the figures typed in by hand applied. */
   daily: DailyRow[];
   manual: ManualSales[];
+  extras: ExtraLine[];
   unassigned: { owner: string; label: string; revenue: number }[];
   /** Sales on your own machines (no client). */
   own: { label: string; revenue: number }[];
@@ -99,9 +100,10 @@ export type Overview = {
 
 export async function loadOverview(store: Store, period: string): Promise<Overview> {
   const { first, last } = monthBounds(period);
-  const [catalog, terminalSales, settings, contracts, invoices, statements, clientList, manual, healthIndex] = await Promise.all([
+  const [catalog, terminalSales, settings, contracts, invoices, statements, clientList, manual, healthIndex, extras] = await Promise.all([
     store.catalog(), store.salesDaily(first, last), store.settings(), store.contracts(),
     store.invoices({ period }), store.statements({ period }), store.clients(), store.manualSales(period), store.healthIndex(),
+    store.extraLines(period),
   ]);
   const mineBusinesses = ownBusinesses(settings.own_businesses);
   // Your own businesses never count for a client.
@@ -116,12 +118,13 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
   for (const client of clients.filter((c) => c.active)) {
     const own = contracts.filter((c) => c.client_id === client.id);
     const running = own.filter((c) => activeIn(c, first, last));
-    const calc = compute(client, period, daily, contracts, healthIndex);
+    const calc = withExtras(compute(client, period, daily, contracts, healthIndex), client.id, extras);
     const invoice = invoices.find((i) => i.client_id === client.id) ?? null;
     const statement = statements.find((s) => s.client_id === client.id) ?? null;
     const typed = manual.find((m) => m.client_id === client.id) ?? null;
     const hasFee = running.some((c) => c.fixed_monthly || c.minimum_monthly);
-    if (!calc.sales_total && !hasFee && !invoice && !statement && !typed) continue;
+    const charged = extras.some((e) => e.client_id === client.id);
+    if (!calc.sales_total && !hasFee && !invoice && !statement && !typed && !charged) continue;
     const vat = percentOf(calc.subtotal, vatPct);
     const issues: string[] = [];
     if (calc.sales_total && !running.length) issues.push("no contract this month");
@@ -135,6 +138,9 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     }
     if (typed && running.length > 1) issues.push(`own figure counts under the contract running on ${last.slice(8)}/${last.slice(5, 7)}`);
     if (typed && !typed.items && running.some((c) => c.per_item)) issues.push("own figure has no number of sales (€ per item)");
+    if (invoice && Math.abs(Number(invoice.subtotal) - calc.subtotal) > 0.005) {
+      issues.push(`commission now € ${calc.subtotal.toFixed(2)}, invoice ${invoice.number} has € ${Number(invoice.subtotal).toFixed(2)}`);
+    }
     for (const [doc, name] of [[invoice, "invoice"], [statement, "afrekening"]] as const) {
       if (doc && Math.abs(Number(doc.sales_total) - calc.sales_total) > 0.005) {
         issues.push(`sales changed since ${name} (was € ${Number(doc.sales_total).toFixed(2)})`);
@@ -166,7 +172,7 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
   const unassigned = [...unassignedMap.entries()].map(([owner, e]) => ({ owner, label: e.label, revenue: roundMoney(e.revenue) }));
   const own = [...ownMap.values()].map((e) => ({ label: e.label, revenue: roundMoney(e.revenue) }));
 
-  return { period, rows, catalog, clients, contracts, daily, manual, unassigned, own, vatPct };
+  return { period, rows, catalog, clients, contracts, daily, manual, extras, unassigned, own, vatPct };
 }
 
 export function totals(rows: OverviewRow[]) {

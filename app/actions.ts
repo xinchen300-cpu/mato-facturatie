@@ -267,6 +267,36 @@ export async function saveHealthIndex(_: ActionState, form: FormData): Promise<A
   }, ["/settings", "/month", "/"]);
 }
 
+export async function saveExtraLine(_: ActionState, form: FormData): Promise<ActionState> {
+  return guard(async () => {
+    const store = await ownerStore();
+    const clientId = Number(str(form, "client_id"));
+    const period = str(form, "period");
+    const client = (await store.clients()).find((c) => c.id === clientId);
+    if (!client) throw new Error("Choose a client.");
+    if (!/^\d{4}-\d{2}$/.test(period)) throw new Error("Unknown month.");
+    const description = str(form, "description");
+    const quantity = numOf(form, "quantity") || 1;
+    const unitPrice = Math.round(numOf(form, "unit_price") * 100) / 100;
+    if (!description) throw new Error("Describe the charge (it is printed on the invoice).");
+    if (quantity <= 0) throw new Error("The quantity must be more than 0.");
+    if (!unitPrice) throw new Error("Fill in the price excl. VAT.");
+    await store.saveExtraLine({ client_id: clientId, period, description, quantity, unit_price: unitPrice });
+    const [invoice] = await store.invoices({ period, clientId });
+    return [
+      ok(`${client.name}: "${description}" (${fmtEur(Math.round(quantity * unitPrice * 100) / 100)} excl. VAT) added to ${periodLabel(period)}.`),
+      ...(invoice ? [info(`Invoice ${invoice.number} was already made and does not change: put this charge on a later month.`)] : []),
+    ];
+  }, ["/month", "/"]);
+}
+
+export async function deleteExtraLine(_: ActionState, form: FormData): Promise<ActionState> {
+  return guard(async () => {
+    await (await ownerStore()).deleteExtraLine(Number(str(form, "id")));
+    return [ok("Extra charge removed.")];
+  }, ["/month", "/"]);
+}
+
 export async function saveManualSales(_: ActionState, form: FormData): Promise<ActionState> {
   return guard(async () => {
     const store = await ownerStore();

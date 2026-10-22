@@ -3,7 +3,7 @@
 
 import { fmtDate, fmtEur, monthBounds, normalizeVat, periodLabel, roundMoney, sumMoney } from "./belgium";
 import { BillitClient, BillitError, buildOrderPayload } from "./billit";
-import { applyManual, compute, machineKey, ownersOf } from "./contracts";
+import { applyManual, compute, machineKey, ownersOf, withExtras } from "./contracts";
 import { render, sendMail, splitAddresses } from "./mailer";
 import { machineLabel, machineSerial, ownBusinesses } from "./month";
 import { invoicePdf, statementPdf } from "./pdf";
@@ -21,15 +21,15 @@ function clientCopy(client: Client): Client {
 
 async function context(store: Store, period: string) {
   const { first, last } = monthBounds(period);
-  const [settings, catalog, clients, contracts, terminalSales, manual, healthIndex] = await Promise.all([
+  const [settings, catalog, clients, contracts, terminalSales, manual, healthIndex, extras] = await Promise.all([
     store.settings(), store.catalog(), store.clients(), store.contracts(), store.salesDaily(first, last), store.manualSales(period),
-    store.healthIndex(),
+    store.healthIndex(), store.extraLines(period),
   ]);
   const daily = applyManual(terminalSales, clients, manual, period);
   // Your own businesses (Settings) never count for a client.
   const mine = ownBusinesses(settings.own_businesses);
   const clientsNow = clients.map((c) => (c.owners.some((o) => mine.has(o)) ? { ...c, owners: c.owners.filter((o) => !mine.has(o)) } : c));
-  return { settings, catalog, clients: clientsNow, contracts, daily, manual, healthIndex, first, last };
+  return { settings, catalog, clients: clientsNow, contracts, daily, manual, healthIndex, extras, first, last };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;
@@ -100,7 +100,7 @@ export async function closeMonth(store: Store, period: string, clientIds: number
     const client = ctx.clients.find((c) => c.id === id);
     if (!client) continue;
     try {
-      const calc = compute(client, period, ctx.daily, ctx.contracts, ctx.healthIndex);
+      const calc = withExtras(compute(client, period, ctx.daily, ctx.contracts, ctx.healthIndex), client.id, ctx.extras);
       let invoice = invoices.find((i) => i.client_id === id) ?? null;
       const result: Made = { client: client.name, invoice: null, statement: null };
       if (calc.subtotal > 0 && !invoice) {

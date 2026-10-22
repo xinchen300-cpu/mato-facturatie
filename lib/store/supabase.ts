@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 import { SUPABASE_KEY, SUPABASE_URL } from "../config";
 import { DEFAULT_SETTINGS } from "../types";
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, SlotRule, Statement } from "../types";
+import type { Catalog, Client, Contract, DailyRow, DetailRow, ExtraLine, Invoice, ManualSales, Settings, SlotRule, Statement } from "../types";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 export async function supabaseServer() {
@@ -118,6 +118,21 @@ export class SupabaseStore implements Store {
 
   async deleteContract(id: number) {
     check(await this.db.from("fact_contracts").delete().eq("id", id).eq("org_id", this.orgId));
+  }
+
+  async extraLines(period?: string) {
+    let query = this.db.from("fact_extra_lines").select("id, client_id, period, description, quantity, unit_price").eq("org_id", this.orgId);
+    if (period) query = query.eq("period", period);
+    const rows = check(await query.order("id")) as Record<string, unknown>[];
+    return rows.map((r) => ({ ...(r as unknown as ExtraLine), quantity: num(r.quantity), unit_price: num(r.unit_price) }));
+  }
+
+  async saveExtraLine(input: Omit<ExtraLine, "id">) {
+    check(await this.db.from("fact_extra_lines").insert({ ...input, org_id: this.orgId }));
+  }
+
+  async deleteExtraLine(id: number) {
+    check(await this.db.from("fact_extra_lines").delete().eq("id", id).eq("org_id", this.orgId));
   }
 
   async slotRules() {

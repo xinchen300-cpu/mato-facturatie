@@ -1,4 +1,4 @@
-import { deleteManualSales, makeDocuments, saveManualSales, sendDocuments, setPaidOut } from "@/app/actions";
+import { deleteExtraLine, deleteManualSales, makeDocuments, saveExtraLine, saveManualSales, sendDocuments, setPaidOut } from "@/app/actions";
 import { ActionForm, MonthPicker, Submit, ToggleAll } from "@/components/client";
 import { Badge, Notice, PageHeader, Section, Status, TableWrap, TextLink } from "@/components/ui";
 import { currentPeriod, fmtDate, fmtEur, formatIban, lastCompletePeriod, periodLabel, recentPeriods, sumMoney, todayIso } from "@/lib/belgium";
@@ -104,6 +104,67 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                 <input className="input w-40" id="m-note" name="note" defaultValue="Televend" />
               </div>
               <Submit>Save figure</Submit>
+            </div>
+          </ActionForm>
+        </details>
+      </Section>
+
+      <Section title="Extra charges" aside={<span className="text-sm text-slate-500">One-off lines on the commission invoice</span>}>
+        {overview.extras.length > 0 && (
+          <TableWrap>
+            <table className="table">
+              <thead>
+                <tr><th>Client</th><th>Description</th><th className="num">Quantity</th><th className="num">Price excl. VAT</th><th className="num">Total</th><th /></tr>
+              </thead>
+              <tbody>
+                {overview.extras.map((e) => (
+                  <tr key={e.id}>
+                    <td className="font-medium">{clientNames.get(e.client_id) ?? e.client_id}</td>
+                    <td>{e.description}</td>
+                    <td className="num">{e.quantity}</td>
+                    <td className="num">{fmtEur(e.unit_price)}</td>
+                    <td className="num">{fmtEur(Math.round(e.quantity * e.unit_price * 100) / 100)}</td>
+                    <td>
+                      <ActionForm action={deleteExtraLine}>
+                        <input type="hidden" name="id" value={e.id} />
+                        <Submit className="text-xs text-red-700 underline" confirm="Remove this charge?">Remove</Submit>
+                      </ActionForm>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+        <details className={overview.extras.length ? "mt-4" : ""}>
+          <summary className="cursor-pointer text-sm font-medium text-brand-700">Add a charge (start-up fee, configuration hours, parts…)</summary>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Added as its own line to the client&apos;s commission invoice for {periodLabel(period)}, with VAT. Add it before you make
+            the invoice: an invoice that was made does not change.
+          </p>
+          <ActionForm action={saveExtraLine} className="mt-3">
+            <input type="hidden" name="period" value={period} />
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="label" htmlFor="x-client">Client</label>
+                <select className="input" id="x-client" name="client_id" defaultValue="" required>
+                  <option value="" disabled>Choose…</option>
+                  {activeClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="min-w-64 flex-1">
+                <label className="label" htmlFor="x-description">Description (on the invoice)</label>
+                <input className="input" id="x-description" name="description" placeholder="Eenmalige opstartkost" required />
+              </div>
+              <div>
+                <label className="label" htmlFor="x-quantity">Quantity</label>
+                <input className="input w-24" id="x-quantity" name="quantity" inputMode="decimal" defaultValue="1" />
+              </div>
+              <div>
+                <label className="label" htmlFor="x-price">Price excl. VAT (€)</label>
+                <input className="input w-32" id="x-price" name="unit_price" inputMode="decimal" placeholder="0,00" required />
+              </div>
+              <Submit>Add charge</Submit>
             </div>
           </ActionForm>
         </details>

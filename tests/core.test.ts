@@ -19,7 +19,7 @@ const client = (id: number, owners: string[]): Client => ({
 const contract = (terms: Partial<Contract>): Contract => ({
   id: 1, client_id: 1, name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl", sales_vat_pct: 6,
   per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "", fee_pct: 0, fee_mode: "payout",
-  fixed_alt: 0, fixed_alt_months: [], indexed: false, ...terms,
+  fixed_alt: 0, fixed_alt_months: [], indexed: false, index_from: null, ...terms,
 });
 const row = (day: string, revenue: number, items = 1, owner = "business:a", machine = "m1"): DailyRow =>
   ({ owner, machine_id: machine, day, items, revenue });
@@ -254,6 +254,9 @@ describe("other months and yearly indexation", () => {
     expect(indexMonths(chens, "2028-05")).toMatchObject({ current: "2028-01", since: "2028-02" });
     expect(indexMonths({ indexed: true, starts_on: "2026-07-01" }, "2027-07")).toMatchObject({ base: "2026-06", current: "2027-06" });
     expect(indexMonths({ indexed: false, starts_on: "2026-07-01" }, "2027-07")).toBeNull();
+    // A deal split over contracts keeps indexing from its original start.
+    expect(indexMonths({ indexed: true, starts_on: "2027-01-01", index_from: "2026-07-01" }, "2027-07"))
+      .toMatchObject({ base: "2026-06", current: "2027-06" });
   });
 
   it("indexes the amounts, not the percentage, and reports a missing index", () => {

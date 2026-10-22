@@ -62,6 +62,12 @@ function ContractForm({ contract, clients, machines, clientId }: {
           <input type="checkbox" name="indexed" defaultChecked={contract?.indexed ?? false} className="size-4 accent-brand-700" />
           Index yearly (health index)
         </label>
+        <div>
+          <label className="label" title="Only when one deal is split over several contracts: the date the deal really started">
+            Index from (if not the From date)
+          </label>
+          <input className="input" name="index_from" type="date" defaultValue={contract?.index_from ?? ""} />
+        </div>
         {num("fee_pct", "Transaction costs %", "0.01", "A % of the gross sales (incl. VAT), e.g. 0.9")}
         <div>
           <label className="label">Transaction costs are</label>

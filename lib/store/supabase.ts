@@ -55,6 +55,7 @@ function toContract(row: Record<string, unknown>): Contract {
     fixed_monthly: num(row.fixed_monthly), minimum_monthly: num(row.minimum_monthly), fee_pct: num(row.fee_pct),
     fee_mode: row.fee_mode === "invoice" ? "invoice" : "payout", fixed_alt: num(row.fixed_alt),
     fixed_alt_months: ((row.fixed_alt_months as number[] | null) ?? []).map(Number), indexed: Boolean(row.indexed),
+    index_from: (row.index_from as string | null) ?? null,
   };
 }
 

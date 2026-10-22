@@ -161,7 +161,7 @@ export async function saveContract(_: ActionState, form: FormData): Promise<Acti
       fee_pct: numOf(form, "fee_pct"), fee_mode: str(form, "fee_mode") === "invoice" ? "invoice" : "payout",
       fixed_alt: numOf(form, "fixed_alt"),
       fixed_alt_months: [...new Set(form.getAll("fixed_alt_months").map(Number))].filter((m) => m >= 1 && m <= 12).sort((a, b) => a - b),
-      indexed: form.has("indexed"),
+      indexed: form.has("indexed"), index_from: str(form, "index_from") || null,
     };
     if (values.fixed_alt_months.length && !values.fixed_alt) throw new Error("Fill in the other fixed amount for the ticked months.");
     if (values.pct < 0 || values.pct > 100) throw new Error("The % must be between 0 and 100.");

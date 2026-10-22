@@ -32,7 +32,7 @@ export function summary(contract: Contract): string {
   if (contract.fee_pct) {
     text += ` · ${fmtPct(contract.fee_pct)} transaction costs ${contract.fee_mode === "invoice" ? "invoiced" : "from the payout"}`;
   }
-  if (contract.indexed) text += " · indexed yearly";
+  if (contract.indexed) text += ` · indexed yearly${contract.index_from ? ` from ${fmtDate(contract.index_from)}` : ""}`;
   if (contract.machines.length) text += ` · ${contract.machines.length} machine(s)`;
   return text;
 }
@@ -56,13 +56,14 @@ export function ownersOf(client: Client): Set<string> {
  * whole month after each anniversary the amounts follow the index of the month before. Returns the months needed
  * for a period: `current` is null before the first anniversary.
  */
-export function indexMonths(contract: Pick<Contract, "indexed" | "starts_on">, period: string):
+export function indexMonths(contract: Pick<Contract, "indexed" | "starts_on"> & { index_from?: string | null }, period: string):
   { base: string; current: string | null; since: string | null; first: string } | null {
   if (!contract.indexed) return null;
-  const [year, month, day] = contract.starts_on.split("-").map(Number);
+  const start = contract.index_from || contract.starts_on;
+  const [year, month, day] = start.split("-").map(Number);
   const anniversary = `${year + 1}-${String(month).padStart(2, "0")}`;
   const first = day === 1 ? anniversary : nextPeriod(anniversary);
-  const base = previousPeriod(contract.starts_on.slice(0, 7));
+  const base = previousPeriod(start.slice(0, 7));
   if (period < first) return { base, current: null, since: null, first };
   const firstMonth = Number(first.slice(5));
   const since = `${Number(period.slice(5)) >= firstMonth ? period.slice(0, 4) : Number(period.slice(0, 4)) - 1}-${first.slice(5)}`;

@@ -99,7 +99,7 @@ function seed(): Db {
   const contract = (client: string, terms: Partial<Contract>): Contract => ({
     id: next++, client_id: id(client), name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl",
     sales_vat_pct: 6, per_item: 0, fixed_monthly: 0, minimum_monthly: 0, prorate: true, machines: [], notes: "",
-    fee_pct: 0, fee_mode: "payout", fixed_alt: 0, fixed_alt_months: [], indexed: false, ...terms,
+    fee_pct: 0, fee_mode: "payout", fixed_alt: 0, fixed_alt_months: [], indexed: false, index_from: null, ...terms,
   });
   return {
     settings: {

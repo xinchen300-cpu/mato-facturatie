@@ -136,6 +136,8 @@ export type Contract = {
   fixed_alt_months: number[];
   /** Amounts indexed every year with the health index (from the month before the start). */
   indexed: boolean;
+  /** The start indexation counts from when a deal is split over several contracts; null = starts_on. */
+  index_from: string | null;
 };
 
 /** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */

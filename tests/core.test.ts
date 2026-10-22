@@ -7,10 +7,10 @@ import { buildOrderPayload } from "@/lib/billit";
 import { compute } from "@/lib/contracts";
 import { closeMonth, deleteInvoice, mailValues } from "@/lib/invoicing";
 import { render } from "@/lib/mailer";
-import { loadOverview } from "@/lib/month";
+import { clientTerminals, loadOverview } from "@/lib/month";
 import { invoicePdf, statementPdf } from "@/lib/pdf";
 import { MemoryStore } from "@/lib/store/memory";
-import type { Client, Contract, DailyRow } from "@/lib/types";
+import type { Catalog, Client, Contract, DailyRow } from "@/lib/types";
 
 const client = (id: number, owners: string[]): Client => ({
   id, name: `Client ${id}`, owners, vat_number: "BE0403170701", street: "Kerkstraat 12 bus 3", zipcode: "9300",
@@ -124,5 +124,32 @@ describe("month closing (demo store)", () => {
     await expect(deleteInvoice(store, oldest.id)).rejects.toThrow(/most recent/);
     await deleteInvoice(store, latest.id);
     expect((await store.settings()).invoice_next_number).toBe(String(latest.seq));
+  });
+});
+
+describe("terminals per client", () => {
+  const catalog: Catalog = {
+    org: { id: "o", name: "Org", timezone: null },
+    businesses: [],
+    machines: [
+      { id: "m1", name: "Hillewaere Istanbul", business_id: "b1", shared_business_id: "b2", serial: "APO1" },
+      { id: "m2", name: "Brood", business_id: "b3", shared_business_id: null, serial: "APO2" },
+      { id: "m3", name: "Tallore", business_id: "b4", shared_business_id: null, serial: null },
+    ],
+    partners: [],
+  };
+  const client = (owners: string[]) => ({ owners }) as Client;
+
+  it("takes the machines of the business, also when it shares one", () => {
+    expect(clientTerminals(client(["business:b2"]), catalog, []).map((t) => t.serial)).toEqual(["APO1"]);
+  });
+
+  it("adds machines where the client's sales were made, e.g. a partner's slots", () => {
+    const rows = [{ owner: "partner:ledoux", machine_id: "m2", day: "2026-09-01", items: 1, revenue: 3 }];
+    expect(clientTerminals(client(["partner:ledoux"]), catalog, rows)).toEqual([{ name: "Brood", serial: "APO2" }]);
+  });
+
+  it("skips machines without a terminal", () => {
+    expect(clientTerminals(client(["business:b4"]), catalog, [])).toEqual([]);
   });
 });

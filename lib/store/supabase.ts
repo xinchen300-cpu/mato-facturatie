@@ -118,11 +118,19 @@ export class SupabaseStore implements Store {
   }
 
   async salesDaily(from: string, to: string) {
-    const rows = check(await this.db.rpc("fact_sales_daily", { target_org: this.orgId, from_day: from, to_day: to }));
-    return (rows as Record<string, unknown>[]).map((r) => ({
-      owner: String(r.owner), machine_id: String(r.machine_id), day: String(r.day).slice(0, 10),
-      items: num(r.items), revenue: num(r.revenue),
-    })) as DailyRow[];
+    const out: DailyRow[] = [];
+    // PostgREST returns at most 1000 rows per request (a year is a few thousand): page through.
+    for (let offset = 0; ; offset += 1000) {
+      const rows = check(await this.db
+        .rpc("fact_sales_daily", { target_org: this.orgId, from_day: from, to_day: to })
+        .range(offset, offset + 999)) as Record<string, unknown>[];
+      out.push(...rows.map((r) => ({
+        owner: String(r.owner), machine_id: String(r.machine_id), day: String(r.day).slice(0, 10),
+        items: num(r.items), revenue: num(r.revenue),
+      })));
+      if (rows.length < 1000) break;
+    }
+    return out;
   }
 
   async salesDetail(from: string, to: string, owners: string[]) {

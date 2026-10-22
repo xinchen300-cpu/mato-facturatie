@@ -21,6 +21,26 @@ export function machineLabel(owner: string, machineId: string, catalog: Catalog)
   return own ? machine.name : `${machine.name} - vakken ${ownerNames(catalog)[owner] ?? owner}`;
 }
 
+/** The Payter terminal (serial number) in a machine, or "". */
+export function machineSerial(machineId: string, catalog: Catalog): string {
+  return catalog.machines.find((m) => m.id === machineId)?.serial ?? "";
+}
+
+/**
+ * The terminals a client sells through: the machines of their businesses in MATO Info, plus every machine where
+ * their sales were made (shared machines, Ledoux and Sferio slots).
+ */
+export function clientTerminals(client: Client, catalog: Catalog, rows: DailyRow[]): { name: string; serial: string }[] {
+  const own = new Set(client.owners);
+  const ids = new Set(rows.filter((r) => own.has(r.owner)).map((r) => r.machine_id));
+  for (const m of catalog.machines) {
+    if (own.has(`business:${m.business_id}`) || own.has(`business:${m.shared_business_id}`)) ids.add(m.id);
+  }
+  return catalog.machines.filter((m) => ids.has(m.id) && m.serial)
+    .map((m) => ({ name: m.name, serial: m.serial! }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** Create a client for every owner that has sales but no client yet (first run, or a new business). */
 export async function ensureClients(store: Store, catalog: Catalog, rows: DailyRow[], clients: Client[]): Promise<Client[]> {
   const known = new Set(clients.flatMap((c) => c.owners));

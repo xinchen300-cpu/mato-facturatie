@@ -85,7 +85,11 @@ export const DEFAULT_SETTINGS: Settings = {
 export type Catalog = {
   org: { id: string; name: string; timezone: string | null };
   businesses: { id: string; name: string; address: string | null; email: string | null; contact_name: string | null }[];
-  machines: { id: string; name: string; business_id: string | null; shared_business_id: string | null }[];
+  machines: {
+    id: string; name: string; business_id: string | null; shared_business_id: string | null;
+    /** Payter terminal serial number, e.g. APO20252200880 (Apollo) or P6X… (P66). */
+    serial: string | null; terminal_model?: string | null;
+  }[];
   partners: { key: string; name: string }[];
 };
 
@@ -178,7 +182,7 @@ export type StatementSnapshot = {
   client: Client;
   company: Partial<Settings>;
   calc: Calc;
-  machines: { label: string; items: number; revenue: number }[];
+  machines: { label: string; terminal?: string; items: number; revenue: number }[];
   products: { product: string; items: number; revenue: number }[];
   daily: { day: string; revenue: number }[];
   sales: { at: string; machine: string; slot: string; product: string; amount: number }[] | null;

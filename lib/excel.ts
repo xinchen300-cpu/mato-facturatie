@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 
 import { formatIban, periodLabel } from "./belgium";
 import type { Overview } from "./month";
-import { machineLabel } from "./month";
+import { machineLabel, machineSerial } from "./month";
 import type { Statement } from "./types";
 
 /** The month in Excel: overview, payouts and sales per machine - for you or the accountant. */
@@ -39,13 +39,17 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
   const machines = book.addWorksheet("Per automaat");
   machines.columns = [
     { header: "Eigenaar", key: "owner", width: 28 }, { header: "Automaat", key: "machine", width: 40 },
+    { header: "Terminal", key: "terminal", width: 18 },
     { header: "Verkopen", key: "items", width: 10 }, { header: "Omzet", key: "revenue", width: 14 },
   ];
-  const totals = new Map<string, { owner: string; machine: string; items: number; revenue: number }>();
+  const totals = new Map<string, { owner: string; machine: string; terminal: string; items: number; revenue: number }>();
   const ownerClient = new Map(overview.clients.flatMap((c) => c.owners.map((o) => [o, c.name] as const)));
   for (const r of overview.daily) {
     const key = `${r.owner}@${r.machine_id}`;
-    const row = totals.get(key) ?? { owner: ownerClient.get(r.owner) ?? r.owner, machine: machineLabel(r.owner, r.machine_id, overview.catalog), items: 0, revenue: 0 };
+    const row = totals.get(key) ?? {
+      owner: ownerClient.get(r.owner) ?? r.owner, machine: machineLabel(r.owner, r.machine_id, overview.catalog),
+      terminal: machineSerial(r.machine_id, overview.catalog), items: 0, revenue: 0,
+    };
     row.items += Number(r.items);
     row.revenue = Math.round((row.revenue + Number(r.revenue)) * 100) / 100;
     totals.set(key, row);

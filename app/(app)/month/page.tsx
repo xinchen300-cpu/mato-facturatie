@@ -3,7 +3,7 @@ import { ActionForm, MonthPicker, Submit, ToggleAll } from "@/components/client"
 import { Badge, Notice, PageHeader, Section, Status, TableWrap, TextLink } from "@/components/ui";
 import { currentPeriod, fmtDate, fmtEur, formatIban, lastCompletePeriod, periodLabel, recentPeriods, sumMoney, todayIso } from "@/lib/belgium";
 import { nextNumberPreview } from "@/lib/invoicing";
-import { loadOverview } from "@/lib/month";
+import { clientTerminals, loadOverview } from "@/lib/month";
 import { getStore } from "@/lib/store";
 
 export const maxDuration = 60;
@@ -63,7 +63,12 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                     return (
                       <tr key={r.client.id}>
                         <td><input type="checkbox" name="client" value={r.client.id} defaultChecked={todo} disabled={sent} className="size-4 accent-brand-700" /></td>
-                        <td className="font-medium">{r.client.name}</td>
+                        <td>
+                          <div className="font-medium">{r.client.name}</div>
+                          <div className="font-mono text-xs text-slate-500">
+                            {clientTerminals(r.client, overview.catalog, overview.daily).map((t) => t.serial).join(", ")}
+                          </div>
+                        </td>
                         <td className="num">{fmtEur(r.calc.sales_total)}</td>
                         <td className="min-w-48 text-slate-600">{r.calc.deal || <span className="text-amber-700">no contract</span>}</td>
                         <td className="num">{fmtEur(r.calc.subtotal)}</td>

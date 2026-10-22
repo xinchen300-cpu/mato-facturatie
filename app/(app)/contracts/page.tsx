@@ -3,7 +3,7 @@ import { ActionForm, Submit } from "@/components/client";
 import { Badge, PageHeader, Section } from "@/components/ui";
 import { addDays, todayIso } from "@/lib/belgium";
 import { describePeriod, machineKey, summary } from "@/lib/contracts";
-import { machineLabel } from "@/lib/month";
+import { machineLabel, machineSerial } from "@/lib/month";
 import { getStore } from "@/lib/store";
 import type { Client, Contract } from "@/lib/types";
 
@@ -91,7 +91,11 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
   const machines = new Map<number, [string, string][]>();
   for (const c of clients) {
     const keys = new Map<string, string>();
-    for (const r of history) if (c.owners.includes(r.owner)) keys.set(machineKey(r), machineLabel(r.owner, r.machine_id, catalog));
+    for (const r of history) {
+      if (!c.owners.includes(r.owner)) continue;
+      const serial = machineSerial(r.machine_id, catalog);
+      keys.set(machineKey(r), machineLabel(r.owner, r.machine_id, catalog) + (serial ? ` · ${serial}` : ""));
+    }
     machines.set(c.id, [...keys.entries()].sort((a, b) => a[1].localeCompare(b[1])));
   }
   const running = (c: Contract) => !c.ends_on || c.ends_on >= today;

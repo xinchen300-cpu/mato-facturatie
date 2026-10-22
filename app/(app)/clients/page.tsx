@@ -1,8 +1,8 @@
 import { deleteClient, saveClient } from "@/app/actions";
 import { ActionForm, Submit } from "@/components/client";
 import { Badge, PageHeader, Section } from "@/components/ui";
-import { formatIban, ibanProblem, vatProblem } from "@/lib/belgium";
-import { ownerNames } from "@/lib/month";
+import { addDays, formatIban, ibanProblem, todayIso, vatProblem } from "@/lib/belgium";
+import { clientTerminals, ownerNames } from "@/lib/month";
 import { getStore } from "@/lib/store";
 import type { Client } from "@/lib/types";
 
@@ -55,7 +55,8 @@ function ClientForm({ client, owners, taken }: { client?: Client; owners: [strin
 
 export default async function ClientsPage() {
   const store = await getStore();
-  const [clients, catalog] = await Promise.all([store.clients(), store.catalog()]);
+  const today = todayIso();
+  const [clients, catalog, history] = await Promise.all([store.clients(), store.catalog(), store.salesDaily(addDays(today, -365), today)]);
   const names = ownerNames(catalog);
   const owners = Object.entries(names).filter(([key]) => key !== "business:none").sort((a, b) => a[1].localeCompare(b[1]));
   const taken = new Map(clients.flatMap((c) => c.owners.map((o) => [o, c.name] as const)));
@@ -66,7 +67,8 @@ export default async function ClientsPage() {
       <p className="-mt-3 mb-6 max-w-3xl text-sm text-slate-600">
         The businesses whose sales you pay out and invoice commission to. A client is created automatically for every business and
         partner with sales in MATO Info. Fill in their VAT number, address, e-mail and IBAN. If two MATO Info names are the same
-        business (e.g. SFERIO and Sferio), tick both on one client.
+        business (e.g. SFERIO and Sferio), tick both on one client. Next to each client are the Payter terminals (Apollo) their
+        sales come through, from MATO Info.
       </p>
       <Section title="Add a client">
         <details>
@@ -79,6 +81,7 @@ export default async function ClientsPage() {
           const issues = [vatProblem(client.vat_number), client.email ? null : "no e-mail", ibanProblem(client.iban),
                           client.street && client.city ? null : "address incomplete", client.owners.length ? null : "no MATO Info sales linked"]
             .filter(Boolean) as string[];
+          const terminals = clientTerminals(client, catalog, history);
           return (
             <details key={client.id} className="card !p-0">
               <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 sm:px-6">
@@ -86,10 +89,23 @@ export default async function ClientsPage() {
                 {!client.active && <Badge>inactive</Badge>}
                 <span className="text-sm text-slate-500">{client.email}</span>
                 <span className="font-mono text-xs text-slate-500">{formatIban(client.iban)}</span>
+                {terminals.length > 0 && (
+                  <span className="font-mono text-xs text-slate-500" title="Payter terminal(s)">
+                    {terminals.map((t) => t.serial).join(", ")}
+                  </span>
+                )}
                 {issues.length > 0 && client.active && <Badge tone="amber">{issues.length} to check</Badge>}
               </summary>
               <div className="border-t border-slate-100 p-4 sm:p-6">
                 {issues.length > 0 && <p className="mb-4 text-xs text-amber-800">{issues.join(" · ")}</p>}
+                <p className="mb-4 text-sm text-slate-600">
+                  <span className="font-medium">Terminals: </span>
+                  {terminals.length
+                    ? terminals.map((t, i) => (
+                        <span key={t.serial}>{i > 0 && ", "}{t.name} <span className="font-mono text-xs">{t.serial}</span></span>
+                      ))
+                    : <span className="text-slate-400">none linked in MATO Info</span>}
+                </p>
                 <ClientForm client={client} owners={owners} taken={taken} />
                 <ActionForm action={deleteClient} className="mt-3">
                   <input type="hidden" name="id" value={client.id} />

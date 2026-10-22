@@ -155,8 +155,9 @@ export class MemoryStore implements Store {
     return {
       org: { id: ORG, name: "Mato Vending (demo)", timezone: "Europe/Brussels" },
       businesses: Object.entries(B).map(([name, id]) => ({ id, name, address: null, email: null, contact_name: null })),
-      machines: MACHINES.map(([id, name, owner, shared]) => ({
+      machines: MACHINES.map(([id, name, owner, shared], i) => ({
         id, name, business_id: B[owner], shared_business_id: shared ? B[shared] : null,
+        serial: `APO2025220${String(1000 + i * 17).padStart(4, "0")}`, terminal_model: "Apollo",
       })),
       partners: [{ key: "partner:ledoux", name: "Ledoux" }, { key: "partner:sferio", name: "Sferio" }],
     };

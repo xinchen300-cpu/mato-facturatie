@@ -259,10 +259,10 @@ export async function statementPdf(statement: Statement, company: Company): Prom
   }
   if (snap.machines.length) {
     sectionTitle(doc, "Per automaat", accent);
-    const rows = snap.machines.map((m) => [m.label, fmtNum(m.items, 0), fmtEur(m.revenue),
+    const rows = snap.machines.map((m) => [m.label, m.terminal ?? "", fmtNum(m.items, 0), fmtEur(m.revenue),
       `${fmtNum(statement.sales_total ? (m.revenue / statement.sales_total) * 100 : 0, 1)}%`]);
-    if (snap.machines.length > 1) rows.push(["Totaal", fmtNum(statement.items, 0), fmtEur(statement.sales_total), "100%"]);
-    table(doc, [{ head: "Automaat", width: 285 }, { head: "Verkopen", width: 70, align: "right" },
+    if (snap.machines.length > 1) rows.push(["Totaal", "", fmtNum(statement.items, 0), fmtEur(statement.sales_total), "100%"]);
+    table(doc, [{ head: "Automaat", width: 190 }, { head: "Terminal", width: 95 }, { head: "Verkopen", width: 70, align: "right" },
       { head: "Omzet", width: 85, align: "right" }, { head: "Aandeel", width: 55, align: "right" }], rows, accent,
       { boldLast: snap.machines.length > 1 });
   }

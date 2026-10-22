@@ -5,7 +5,7 @@ import { fmtDate, fmtEur, monthBounds, normalizeVat, periodLabel, roundMoney, su
 import { BillitClient, BillitError, buildOrderPayload } from "./billit";
 import { compute, machineKey } from "./contracts";
 import { render, sendMail, splitAddresses } from "./mailer";
-import { machineLabel } from "./month";
+import { machineLabel, machineSerial } from "./month";
 import { invoicePdf, statementPdf } from "./pdf";
 import type { Store } from "./store/types";
 import type { Calc, Client, Invoice, Settings, Statement, StatementSnapshot } from "./types";
@@ -42,11 +42,13 @@ async function createInvoice(store: Store, ctx: Ctx, client: Client, period: str
 async function statementSnapshot(store: Store, ctx: Ctx, client: Client, calc: Calc, invoice: Invoice | null): Promise<StatementSnapshot> {
   const own = new Set(client.owners);
   const rows = ctx.daily.filter((r) => own.has(r.owner));
-  const machines = new Map<string, { label: string; items: number; revenue: number }>();
+  const machines = new Map<string, { label: string; terminal: string; items: number; revenue: number }>();
   const days = new Map<string, number>();
   for (const r of rows) {
     const key = machineKey(r);
-    const m = machines.get(key) ?? { label: machineLabel(r.owner, r.machine_id, ctx.catalog), items: 0, revenue: 0 };
+    const m = machines.get(key) ?? {
+      label: machineLabel(r.owner, r.machine_id, ctx.catalog), terminal: machineSerial(r.machine_id, ctx.catalog), items: 0, revenue: 0,
+    };
     m.items += Number(r.items);
     m.revenue = roundMoney(m.revenue + Number(r.revenue));
     machines.set(key, m);

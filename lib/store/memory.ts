@@ -212,6 +212,10 @@ export class MemoryStore implements Store {
     this.db.contracts = this.db.contracts.filter((c) => c.id !== id);
   }
 
+  async slotRules() {
+    return [];
+  }
+
   async healthIndex() {
     return { ...this.db.healthIndex };
   }

@@ -1,5 +1,5 @@
 import type {
-  Catalog, Client, Contract, DailyRow, DetailRow, Invoice, InvoiceLine, ManualSales, Settings, Statement, StatementSnapshot,
+  Catalog, Client, Contract, DailyRow, DetailRow, Invoice, InvoiceLine, ManualSales, Settings, SlotRule, Statement, StatementSnapshot,
 } from "../types";
 
 export type NewInvoice = {
@@ -45,6 +45,9 @@ export interface Store {
   insertContract(contract: Omit<Contract, "id">): Promise<void>;
   updateContract(id: number, patch: Partial<Omit<Contract, "id">>): Promise<void>;
   deleteContract(id: number): Promise<void>;
+
+  /** Slot ranges that belong to a business (used when the sales are counted). */
+  slotRules(): Promise<SlotRule[]>;
 
   /** The health index (gezondheidsindex) per month, "YYYY-MM" -> value, for indexing contracts. */
   healthIndex(): Promise<Record<string, number>>;

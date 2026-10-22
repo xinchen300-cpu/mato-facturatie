@@ -143,6 +143,10 @@ export type Contract = {
   index_from: string | null;
 };
 
+/** Slots of a machine that belong to a business from a date, also when missing from the MATO Info layout. */
+export type SlotRule = { id: number; machine_id: string; slot_from: number; slot_to: number; business_id: string;
+  valid_from: string; valid_to: string | null; note: string };
+
 /** A client's sales for one month typed in by hand (e.g. from Televend); replaces the MATO Info sales. */
 export type ManualSales = { id: number; client_id: number; period: string; amount: number; items: number; note: string };
 

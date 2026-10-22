@@ -1,7 +1,7 @@
 import { saveHealthIndex, saveSettings, testBillit, testEmail } from "@/app/actions";
 import { ActionForm, Submit } from "@/components/client";
 import { PageHeader, Section } from "@/components/ui";
-import { currentPeriod, periodLabel, previousPeriod, todayIso } from "@/lib/belgium";
+import { currentPeriod, fmtDate, periodLabel, previousPeriod, todayIso } from "@/lib/belgium";
 import { indexMonths } from "@/lib/contracts";
 import { nextNumberPreview } from "@/lib/invoicing";
 import { ownBusinesses, ownMachines } from "@/lib/month";
@@ -29,10 +29,13 @@ function Check({ s, name, label }: { s: Settings; name: keyof Settings; label: s
   );
 }
 
+/** The Belgian calendar day of a timestamp, as YYYY-MM-DD. */
+const brusselsDay = (ts: string) => new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Brussels" });
+
 export default async function SettingsPage() {
   const store = await getStore();
-  const [s, catalog, contracts, clients, healthIndex] = await Promise.all([
-    store.settings(), store.catalog(), store.contracts(), store.clients(), store.healthIndex(),
+  const [s, catalog, contracts, clients, healthIndex, slotRules] = await Promise.all([
+    store.settings(), store.catalog(), store.contracts(), store.clients(), store.healthIndex(), store.slotRules(),
   ]);
   // The health index months the indexed contracts need, up to this month, and when each is indexed next.
   const now = currentPeriod();
@@ -232,6 +235,20 @@ export default async function SettingsPage() {
           </div>
           <Submit>Save</Submit>
         </ActionForm>
+        {slotRules.length > 0 && (
+          <div className="mt-6">
+            <span className="label">Slot rules (also for slots missing from the MATO Info layout)</span>
+            <ul className="space-y-1 text-sm text-slate-600">
+              {slotRules.map((r) => (
+                <li key={r.id}>
+                  {catalog.machines.find((m) => m.id === r.machine_id)?.name ?? "Machine"}: slots {r.slot_from}-{r.slot_to} count for{" "}
+                  <strong>{catalog.businesses.find((b) => b.id === r.business_id)?.name ?? "?"}</strong> from {fmtDate(brusselsDay(r.valid_from))}
+                  {r.valid_to ? ` until ${fmtDate(brusselsDay(r.valid_to))}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Section>
 
       <Section title="Your data">

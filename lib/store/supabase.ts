@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 import { SUPABASE_KEY, SUPABASE_URL } from "../config";
 import { DEFAULT_SETTINGS } from "../types";
-import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, Statement } from "../types";
+import type { Catalog, Client, Contract, DailyRow, DetailRow, Invoice, ManualSales, Settings, SlotRule, Statement } from "../types";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 export async function supabaseServer() {
@@ -118,6 +118,12 @@ export class SupabaseStore implements Store {
 
   async deleteContract(id: number) {
     check(await this.db.from("fact_contracts").delete().eq("id", id).eq("org_id", this.orgId));
+  }
+
+  async slotRules() {
+    return check(await this.db.from("fact_slot_rules")
+      .select("id, machine_id, slot_from, slot_to, business_id, valid_from, valid_to, note")
+      .eq("org_id", this.orgId).order("valid_from")) as SlotRule[];
   }
 
   async healthIndex() {

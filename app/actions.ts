@@ -120,6 +120,7 @@ export async function saveClient(_: ActionState, form: FormData): Promise<Action
       street: str(form, "street"), zipcode: str(form, "zipcode"), city: str(form, "city"),
       country: (str(form, "country") || "BE").toUpperCase(), email: str(form, "email"), cc_email: str(form, "cc_email"),
       iban: normalizeIban(str(form, "iban")), active: form.has("active"), notes: str(form, "notes"),
+      own_terminal: form.has("own_terminal"),
     };
     // An owner (business / partner) counts for one client only.
     const others = (await store.clients()).filter((c) => c.id !== id);

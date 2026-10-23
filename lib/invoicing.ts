@@ -108,7 +108,9 @@ export async function closeMonth(store: Store, period: string, clientIds: number
         result.invoice = invoice.number;
       }
       const existing = statements.find((s) => s.client_id === id) ?? null;
-      if ((calc.sales_total || calc.subtotal) && existing?.email_status !== "sent") {
+      // Own terminal and no sales typed in: nothing to report on an afrekening.
+      const report = calc.sales_total || (calc.subtotal && !client.own_terminal);
+      if (report && existing?.email_status !== "sent") {
         await store.saveStatement({
           client_id: id, period, made_on: docDate, sales_total: calc.sales_total, items: calc.items,
           payout: calc.payout, invoice_id: invoice?.id ?? null,
@@ -183,7 +185,11 @@ export function mailValues(client: Client, period: string, statement: Statement 
     uitbetaling: fmtEur(payout), bedrijf: settings.company_name, factuurnummer: "", bedrag: "", vervaldatum: "",
     commissie: "", mededeling: "", factuur_zin: "",
     aftrek_zin: deducted > 0 ? ` (na aftrek van ${fmtEur(deducted)} transactiekosten)` : "",
+    uitbetaling_zin: "",
   };
+  values.uitbetaling_zin = client.own_terminal
+    ? "U ontving deze opbrengst rechtstreeks via uw eigen betaalterminal, wij storten dus niets door."
+    : `Wij storten u ${values.uitbetaling} door${values.aftrek_zin}.`;
   if (invoice) {
     Object.assign(values, {
       factuurnummer: invoice.number, bedrag: fmtEur(invoice.total), vervaldatum: fmtDate(invoice.due_date),

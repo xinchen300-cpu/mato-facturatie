@@ -15,6 +15,7 @@ import type { Catalog, Client, Contract, DailyRow } from "@/lib/types";
 const client = (id: number, owners: string[]): Client => ({
   id, name: `Client ${id}`, owners, vat_number: "BE0403170701", street: "Kerkstraat 12 bus 3", zipcode: "9300",
   city: "Aalst", country: "BE", email: "x@example.be", cc_email: "", iban: "BE71096123456769", active: true, notes: "",
+  own_terminal: false,
 });
 const contract = (terms: Partial<Contract>): Contract => ({
   id: 1, client_id: 1, name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl", sales_vat_pct: 6,
@@ -354,5 +355,37 @@ describe("transaction costs without VAT", () => {
     const payload = buildOrderPayload(invoice, istanbul) as { OrderLines: { VATPercentage: number }[] };
     expect(payload.OrderLines.map((l) => l.VATPercentage)).toEqual([21, 0]);
     expect((await invoicePdf(invoice, invoice.snapshot.company, invoice.snapshot.client)).subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});
+
+describe("own payment terminal", () => {
+  it("pays nothing out and puts transaction costs on the invoice", () => {
+    const calc = compute({ ...client(1, []), own_terminal: true }, "2026-10", [row("2026-10-31", 1060, 50, "manual:1", "manual:1")],
+      [contract({ pct: 25, base: "excl", fee_pct: 0.9 })]);
+    expect(calc.sales_total).toBe(1060);
+    expect(calc.lines.map((l) => [l.kind, l.unit_price])).toEqual([["pct", 250], ["fee", 9.54]]);
+    expect(calc.payout).toBe(0);
+    expect(calc.fee_deducted).toBe(0);
+  });
+
+  it("shows the client before their figure is in, then charges both contracts without a payout", async () => {
+    const store = MemoryStore.fresh();
+    const traiteur = (await store.clients()).find((c) => c.own_terminal)!;
+    let row10 = (await loadOverview(store, "2026-10")).rows.find((r) => r.client.id === traiteur.id)!;
+    expect(row10.calc.subtotal).toBe(550);
+    expect(row10.issues).toContain("own terminal: enter their sales under Own sales figures");
+
+    await store.saveManualSales({ client_id: traiteur.id, period: "2026-10", amount: 2120, items: 400, note: "opgave Traiteur" });
+    row10 = (await loadOverview(store, "2026-10")).rows.find((r) => r.client.id === traiteur.id)!;
+    expect(row10.calc.lines.map((l) => [l.kind, l.unit_price])).toEqual([["fixed", 550], ["pct", 500]]);
+    expect(row10.calc.lines[0].detail).toBe(""); // the fixed fee does not repeat the sales of the commission contract
+    expect(row10.issues).toEqual([]);
+
+    await closeMonth(store, "2026-10", [traiteur.id], "2026-11-03");
+    const [statement] = await store.statements({ period: "2026-10", clientId: traiteur.id });
+    expect(statement.payout).toBe(0);
+    const values = mailValues(traiteur, "2026-10", statement, null, await store.settings());
+    expect(render((await store.settings()).mail_body, values)).toContain("rechtstreeks via uw eigen betaalterminal");
+    expect((await statementPdf(statement, statement.snapshot.company)).subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

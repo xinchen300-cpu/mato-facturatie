@@ -64,7 +64,7 @@ export async function ensureClients(store: Store, catalog: Catalog, rows: DailyR
     await store.insertClient({
       name: names[owner] ?? owner, owners: [owner], vat_number: "", street: business?.address ?? "", zipcode: "",
       city: "", country: "BE", email: business?.email ?? "", cc_email: "", iban: "", active: true,
-      notes: business?.contact_name ? `Contact: ${business.contact_name}` : "",
+      notes: business?.contact_name ? `Contact: ${business.contact_name}` : "", own_terminal: false,
     });
   }
   return store.clients();
@@ -124,7 +124,10 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     const typed = manual.find((m) => m.client_id === client.id) ?? null;
     const hasFee = running.some((c) => c.fixed_monthly || c.minimum_monthly);
     const charged = extras.some((e) => e.client_id === client.id);
-    if (!calc.sales_total && !hasFee && !invoice && !statement && !typed && !charged) continue;
+    const onSales = running.filter((c) => c.pct || c.per_item || c.minimum_monthly);
+    // Own terminal: their sales are typed in, so show them as soon as a contract runs.
+    const waiting = client.own_terminal && running.length > 0;
+    if (!calc.sales_total && !hasFee && !invoice && !statement && !typed && !charged && !waiting) continue;
     const vat = vatOfLines(calc.lines, vatPct).vat;
     const issues: string[] = [];
     if (calc.sales_total && !running.length) issues.push("no contract this month");
@@ -132,11 +135,12 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     if (!client.email) issues.push("no e-mail");
     if (calc.subtotal && !client.vat_number) issues.push("no VAT number");
     if (calc.subtotal && (!client.street || !client.city)) issues.push("address incomplete");
-    if (calc.sales_total && !client.iban) issues.push("no IBAN for payout");
+    if (calc.payout && !client.iban) issues.push("no IBAN for payout");
+    if (client.own_terminal && onSales.length && !typed) issues.push("own terminal: enter their sales under Own sales figures");
     if (calc.index_missing.length) {
       issues.push(`health index of ${calc.index_missing.map(periodLabel).join(", ")} missing (Settings): not indexed`);
     }
-    if (typed && running.length > 1) issues.push(`own figure counts under the contract running on ${last.slice(8)}/${last.slice(5, 7)}`);
+    if (typed && onSales.length > 1) issues.push(`own figure counts under the contract running on ${last.slice(8)}/${last.slice(5, 7)}`);
     if (typed && !typed.items && running.some((c) => c.per_item)) issues.push("own figure has no number of sales (€ per item)");
     if (invoice && Math.abs(Number(invoice.subtotal) - calc.subtotal) > 0.005) {
       issues.push(`commission now € ${calc.subtotal.toFixed(2)}, invoice ${invoice.number} has € ${Number(invoice.subtotal).toFixed(2)}`);

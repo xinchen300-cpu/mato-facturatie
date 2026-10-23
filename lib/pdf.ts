@@ -225,6 +225,9 @@ export async function invoicePdf(invoice: Invoice, company: Company, client: Cli
 
 /** "Wij storten … aan u door", with the transaction costs taken off when the contract says so. */
 function payoutText(statement: Statement, calc: Calc): string {
+  if (statement.snapshot.client.own_terminal) {
+    return "U ontving deze opbrengst rechtstreeks via uw eigen betaalterminal: wij storten niets door";
+  }
   const deducted = roundMoney(Number(statement.sales_total) - Number(statement.payout));
   if (deducted <= 0) return `Wij storten de volledige omzet van ${fmtEur(statement.payout)} aan u door`;
   const pcts = [...new Set((calc.contracts ?? []).filter((c) => c.fee_mode === "payout" && c.fee_pct).map((c) => fmtPct(c.fee_pct)))];
@@ -249,7 +252,7 @@ export async function statementPdf(statement: Statement, company: Company): Prom
   let y = M + 62;
   const tiles: [string, string][] = [
     ["OMZET", fmtEur(statement.sales_total)], ["VERKOPEN", fmtNum(statement.items, 0)],
-    ["UITBETALING AAN U", fmtEur(statement.payout)], ["COMMISSIE (EXCL. BTW)", fmtEur(snap.calc.subtotal)],
+    ["UITBETALING AAN U", client.own_terminal ? "Geen" : fmtEur(statement.payout)], ["COMMISSIE (EXCL. BTW)", fmtEur(snap.calc.subtotal)],
   ];
   const tw = (CW - 3 * 10) / 4;
   tiles.forEach(([label, value], i) => {
@@ -261,7 +264,7 @@ export async function statementPdf(statement: Statement, company: Company): Prom
   y += 60;
 
   // Payout
-  const iban = client.iban ? ` op rekening ${formatIban(client.iban)}` : "";
+  const iban = client.iban && !client.own_terminal ? ` op rekening ${formatIban(client.iban)}` : "";
   const payout = payoutText(statement, snap.calc) + `${iban}.`;
   const box = 30 + doc.font("Helvetica").fontSize(9).heightOfString(payout, { width: CW - 24 });
   doc.rect(M, y, CW, box).fill(tint(accent, 0.92));

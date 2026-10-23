@@ -95,8 +95,13 @@ function seed(): Db {
     id: next++, name, owners: [owner], vat_number: ["BE0403170701", "BE0447372345", "BE0811111187"][i % 3],
     street: `Markt ${i + 1}`, zipcode: "8820", city: "Torhout", country: "BE",
     email: `${name.split(" ")[0].toLowerCase()}@example.be`, cc_email: "", iban: i % 4 ? "BE71096123456769" : "",
-    active: true, notes: "",
+    active: true, notes: "", own_terminal: false,
   }));
+  // A partner with their own payment terminal: not in MATO Info, sales typed in each month.
+  clients.push({
+    id: next++, name: "Traiteur Eigen Terminal", owners: [], vat_number: "BE0685979446", street: "Kerkstraat 1", zipcode: "8610",
+    city: "Kortemark", country: "BE", email: "traiteur@example.be", cc_email: "", iban: "", active: true, notes: "", own_terminal: true,
+  });
   const id = (name: string) => clients.find((c) => c.name === name)!.id;
   const contract = (client: string, terms: Partial<Contract>): Contract => ({
     id: next++, client_id: id(client), name: "", starts_on: "2026-01-01", ends_on: null, pct: 0, base: "incl",
@@ -126,6 +131,8 @@ function seed(): Db {
       contract("Tallore", { name: "Oud contract", pct: 15, ends_on: "2026-09-15" }),
       contract("Tallore", { name: "Nieuw contract", pct: 17, starts_on: "2026-09-16" }),
       contract("Zoete Zonde", { name: "Vaste huur", fixed_monthly: 50 }),
+      contract("Traiteur Eigen Terminal", { name: "MATO Partner", fixed_monthly: 550, indexed: true }),
+      contract("Traiteur Eigen Terminal", { name: "MATO Instap", pct: 25, base: "excl" }),
     ],
     invoices: [],
     statements: [],

@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mail_body:
     "Beste {klant},\n\n" +
     "In bijlage vindt u de afrekening van uw verkopen in {maand}.\n\n" +
-    "Omzet {maand}: {omzet} ({verkopen} verkopen). Wij storten u {uitbetaling} door{aftrek_zin}.\n\n" +
+    "Omzet {maand}: {omzet} ({verkopen} verkopen). {uitbetaling_zin}\n\n" +
     "{factuur_zin}" +
     "Met vriendelijke groeten,\n" +
     "{bedrijf}",
@@ -116,6 +116,8 @@ export type Client = {
   iban: string;
   active: boolean;
   notes: string;
+  /** Own payment terminal: the client receives the money itself, so no payout; sales are typed in each month. */
+  own_terminal: boolean;
 };
 
 export type Contract = {

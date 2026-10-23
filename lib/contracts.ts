@@ -101,6 +101,8 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
   const lines: InvoiceLine[] = [];
   const details: ContractResult[] = [];
   const indexMissing = new Set<string>();
+  // When another contract charges on the sales, a fixed fee's line does not repeat the sales.
+  const salesBased = own.some((c) => activeIn(c, first, last) && (c.pct || c.per_item));
 
   for (const contract of own) {
     const span = activeIn(contract, first, last);
@@ -150,7 +152,8 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     const minimum = roundMoney(index(Number(contract.minimum_monthly || 0)) * factor);
     const topup = minimum ? roundMoney(Math.max(0, minimum - pctAmount - itemAmount)) : 0;
     const feePct = Number(contract.fee_pct || 0);
-    const feeMode = contract.fee_mode === "invoice" ? "invoice" : "payout";
+    // With their own terminal there is no payout to take the transaction costs from.
+    const feeMode = client.own_terminal || contract.fee_mode === "invoice" ? "invoice" : "payout";
     const fee = percentOf(salesTotal, feePct);
 
     let detail = `Omzet ${spanText}: ${fmtEur(salesTotal)} incl. btw`;
@@ -171,7 +174,7 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
       const proRata = factor !== 1 ? ` (pro rata ${days}/${daysInMonth} dagen)` : "";
       const indexed = indexText ? `${fmtEur(fixedBase)} ${indexText} = ${fmtEur(index(fixedBase))}` : "";
       lines.push({ description: `Vaste vergoeding ${spanText}${label}${proRata}`,
-                   detail: indexed || (contract.pct || contract.per_item ? "" : detail), quantity: 1, unit_price: fixed, kind: "fixed" });
+                   detail: indexed || (salesBased ? "" : detail), quantity: 1, unit_price: fixed, kind: "fixed" });
     }
     if (topup) {
       lines.push({ description: `Aanvulling tot minimum ${fmtEur(minimum)} ${spanText}${label}`,
@@ -204,7 +207,8 @@ export function compute(client: Client, period: string, rows: DailyRow[], contra
     uncovered_total: sumMoney(uncovered.map((r) => Number(r.revenue))),
     uncovered_items: uncovered.reduce((acc, r) => acc + Number(r.items), 0),
     fee_deducted: feeDeducted,
-    payout: roundMoney(salesTotal - feeDeducted),
+    // Own terminal: they received the money themselves.
+    payout: client.own_terminal ? 0 : roundMoney(salesTotal - feeDeducted),
     index_missing: [...indexMissing].sort(),
     deal: details.map((d) => d.summary).join(" | "),
   };

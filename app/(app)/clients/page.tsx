@@ -39,6 +39,16 @@ function ClientForm({ client, owners, taken }: { client?: Client; owners: [strin
           ))}
         </div>
       </div>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="own_terminal" defaultChecked={client?.own_terminal} className="mt-0.5 size-4 accent-brand-700" />
+        <span>
+          Own payment terminal
+          <span className="block text-xs text-slate-500">
+            They receive the money of their sales themselves: no payout. Type in their sales each month under Close the month →
+            Own sales figures, for the commission.
+          </span>
+        </span>
+      </label>
       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
         <div>
           <label className="label">Notes</label>
@@ -78,8 +88,9 @@ export default async function ClientsPage() {
       </Section>
       <div className="space-y-3">
         {clients.map((client) => {
-          const issues = [vatProblem(client.vat_number), client.email ? null : "no e-mail", ibanProblem(client.iban),
-                          client.street && client.city ? null : "address incomplete", client.owners.length ? null : "no MATO Info sales linked"]
+          const issues = [vatProblem(client.vat_number), client.email ? null : "no e-mail", client.own_terminal ? null : ibanProblem(client.iban),
+                          client.street && client.city ? null : "address incomplete",
+                          client.owners.length || client.own_terminal ? null : "no MATO Info sales linked"]
             .filter(Boolean) as string[];
           const terminals = clientTerminals(client, catalog, history);
           return (
@@ -87,6 +98,7 @@ export default async function ClientsPage() {
               <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 sm:px-6">
                 <span className="font-medium">{client.name}</span>
                 {!client.active && <Badge>inactive</Badge>}
+                {client.own_terminal && <Badge tone="sky">own terminal</Badge>}
                 <span className="text-sm text-slate-500">{client.email}</span>
                 <span className="font-mono text-xs text-slate-500">{formatIban(client.iban)}</span>
                 {terminals.length > 0 && (
@@ -104,7 +116,7 @@ export default async function ClientsPage() {
                     ? terminals.map((t, i) => (
                         <span key={t.serial}>{i > 0 && ", "}{t.name} <span className="font-mono text-xs">{t.serial}</span></span>
                       ))
-                    : <span className="text-slate-400">none linked in MATO Info</span>}
+                    : <span className="text-slate-400">{client.own_terminal ? "their own" : "none linked in MATO Info"}</span>}
                 </p>
                 <ClientForm client={client} owners={owners} taken={taken} />
                 <ActionForm action={deleteClient} className="mt-3">

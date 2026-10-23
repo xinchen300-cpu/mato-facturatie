@@ -23,7 +23,8 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
   const env = settings.billit_env || "sandbox";
   const hasBillit = Boolean(settings.billit_api_key && settings.billit_party_id);
   const hasMail = Boolean(settings.smtp_host);
-  const payouts = rows.filter((r) => r.statement);
+  // Clients with their own terminal received the money themselves: nothing to pay out.
+  const payouts = rows.filter((r) => r.statement && !r.client.own_terminal);
   const open = sumMoney(payouts.filter((r) => !r.statement!.paid_out).map((r) => Number(r.statement!.payout)));
   const clientNames = new Map(overview.clients.map((c) => [c.id, c.name]));
   const activeClients = overview.clients.filter((c) => c.active).sort((a, b) => a.name.localeCompare(b.name));
@@ -74,7 +75,8 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
             For a month in which MATO Info misses sales of a client, for example when a terminal was connected halfway through the
             month. Your figure replaces all of that client&apos;s MATO Info sales for {periodLabel(period)}: in the commission, the
-            payout, the afrekening and the e-mail. The afrekening says the figures come from the source you fill in.
+            payout, the afrekening and the e-mail. The afrekening says the figures come from the source you fill in. Clients with their
+            own payment terminal (Clients page) are not in MATO Info: enter their figure here every month.
           </p>
           <ActionForm action={saveManualSales} className="mt-3">
             <input type="hidden" name="period" value={period} />
@@ -195,6 +197,7 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                         </td>
                         <td className="num">
                           {fmtEur(r.calc.sales_total)}
+                          {r.client.own_terminal && <div className="text-xs text-slate-500">own terminal, no payout</div>}
                           {r.calc.fee_deducted > 0 && (
                             <div className="text-xs text-slate-500" title="After the transaction costs">payout {fmtEur(r.calc.payout)}</div>
                           )}

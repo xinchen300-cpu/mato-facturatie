@@ -4,6 +4,7 @@
 import PDFDocument from "pdfkit";
 
 import { fmtDate, fmtEur, fmtNum, fmtPct, formatIban, monthBounds, periodLabel, roundMoney } from "./belgium";
+import { vatOfLines } from "./contracts";
 import type { Calc, Client, Invoice, Settings, Statement } from "./types";
 
 const DARK = "#1c2126";
@@ -185,7 +186,12 @@ export async function invoicePdf(invoice: Invoice, company: Company, client: Cli
   // Totals
   const bx = W - M - 230;
   y += 4;
-  for (const [label, value] of [["Subtotaal excl. btw", fmtEur(invoice.subtotal)], [`Btw ${fmtPct(invoice.vat_pct)}`, fmtEur(invoice.vat_amount)]]) {
+  // VAT per rate; lines without VAT (transaction costs passed on) are listed apart.
+  const { rates } = vatOfLines(invoice.lines, Number(invoice.vat_pct));
+  const vatRows = rates.length > 1
+    ? rates.map((r) => r.pct ? [`Btw ${fmtPct(r.pct)} over ${fmtEur(r.base)}`, fmtEur(r.vat)] : [`Zonder btw`, fmtEur(r.base)])
+    : [[`Btw ${fmtPct(invoice.vat_pct)}`, fmtEur(invoice.vat_amount)]];
+  for (const [label, value] of [["Subtotaal excl. btw", fmtEur(invoice.subtotal)], ...vatRows]) {
     doc.font("Helvetica").fontSize(9).fillColor(GREY).text(label, bx, y, { width: 140 });
     doc.fillColor(DARK).text(value, bx + 140, y, { width: 90, align: "right" });
     y += 16;

@@ -219,3 +219,20 @@ export function withExtras(calc: Calc, clientId: number, extras: ExtraLine[]): C
   }))];
   return { ...calc, lines, subtotal: sumMoney(lines.map((l) => roundMoney(l.quantity * l.unit_price))) };
 }
+
+/** The VAT rate of an invoice line: transaction costs are passed on without VAT, the rest at the invoice rate. */
+export function lineVatPct(line: Pick<InvoiceLine, "kind" | "vat_pct">, defaultPct: number): number {
+  if (line.vat_pct !== undefined && line.vat_pct !== null) return Number(line.vat_pct);
+  return line.kind === "fee" ? 0 : defaultPct;
+}
+
+/** VAT per rate over the lines: each rate's total is rounded once. Returns the rates and the VAT. */
+export function vatOfLines(lines: InvoiceLine[], defaultPct: number): { rates: { pct: number; base: number; vat: number }[]; vat: number } {
+  const bases = new Map<number, number>();
+  for (const l of lines) {
+    const pct = lineVatPct(l, defaultPct);
+    bases.set(pct, roundMoney((bases.get(pct) ?? 0) + roundMoney(l.quantity * l.unit_price)));
+  }
+  const rates = [...bases.entries()].sort((a, b) => b[0] - a[0]).map(([pct, base]) => ({ pct, base, vat: percentOf(base, pct) }));
+  return { rates, vat: sumMoney(rates.map((r) => r.vat)) };
+}

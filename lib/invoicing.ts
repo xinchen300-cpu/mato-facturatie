@@ -3,7 +3,7 @@
 
 import { fmtDate, fmtEur, monthBounds, normalizeVat, periodLabel, roundMoney, sumMoney } from "./belgium";
 import { BillitClient, BillitError, buildOrderPayload } from "./billit";
-import { applyManual, compute, machineKey, ownersOf, withExtras } from "./contracts";
+import { applyManual, compute, lineVatPct, machineKey, ownersOf, withExtras } from "./contracts";
 import { render, sendMail, splitAddresses } from "./mailer";
 import { machineLabel, machineSerial, ownBusinesses } from "./month";
 import { invoicePdf, statementPdf } from "./pdf";
@@ -38,7 +38,7 @@ async function createInvoice(store: Store, ctx: Ctx, client: Client, period: str
   const vatPct = Number(ctx.settings.invoice_vat_pct || 0);
   return store.createInvoice({
     clientId: client.id, period, invoiceDate, dueDays: Number(ctx.settings.invoice_due_days || 30),
-    lines: calc.lines.map((l) => ({ ...l, vat_pct: vatPct })),
+    lines: calc.lines.map((l) => ({ ...l, vat_pct: lineVatPct(l, vatPct) })),
     snapshot: { client: clientCopy(client), company: companyOf(ctx.settings), calc },
     salesTotal: calc.sales_total, items: calc.items, subtotal: calc.subtotal, vatPct,
   });

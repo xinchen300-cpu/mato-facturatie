@@ -1,9 +1,10 @@
 // In-memory store with made-up sales, for trying the screens locally (FACT_DEMO=1) and for tests.
 // Same names as Mato Vending's businesses and machines; every number is invented.
 
-import { addDays, ogm, percentOf, roundMoney } from "../belgium";
+import { addDays, ogm, roundMoney } from "../belgium";
 import { DEFAULT_SETTINGS } from "../types";
 import type { Catalog, Client, Contract, DailyRow, DetailRow, ExtraLine, Invoice, ManualSales, Settings, Statement } from "../types";
+import { vatOfLines } from "../contracts";
 import type { NewInvoice, StatementInput, Store } from "./types";
 
 const ORG = "00000000-0000-0000-0000-00000000demo";
@@ -294,7 +295,7 @@ export class MemoryStore implements Store {
     if (this.db.invoices.some((i) => i.client_id === input.clientId && i.period === input.period)) {
       throw new Error("This client already has an invoice for this month.");
     }
-    const vat = percentOf(input.subtotal, input.vatPct);
+    const vat = vatOfLines(input.lines, input.vatPct).vat;
     const invoice: Invoice = {
       id: this.db.next++, client_id: input.clientId, period: input.period, number, seq, year,
       invoice_date: input.invoiceDate, due_date: addDays(input.invoiceDate, input.dueDays), lines: input.lines,

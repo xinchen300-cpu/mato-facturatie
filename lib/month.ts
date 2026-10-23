@@ -1,8 +1,8 @@
 // The month at a glance: per client the sales (= payout), the commission over their contracts, the documents,
 // and what still needs attention. Also creates a client for every MATO Info owner that sells and has none yet.
 
-import { monthBounds, percentOf, periodLabel, roundMoney, sumMoney } from "./belgium";
-import { activeIn, applyManual, compute, ownersOf, withExtras } from "./contracts";
+import { monthBounds, periodLabel, roundMoney, sumMoney } from "./belgium";
+import { activeIn, applyManual, compute, ownersOf, vatOfLines, withExtras } from "./contracts";
 import type { Store } from "./store/types";
 import type { Calc, Catalog, Client, Contract, DailyRow, ExtraLine, Invoice, ManualSales, Statement } from "./types";
 
@@ -125,7 +125,7 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     const hasFee = running.some((c) => c.fixed_monthly || c.minimum_monthly);
     const charged = extras.some((e) => e.client_id === client.id);
     if (!calc.sales_total && !hasFee && !invoice && !statement && !typed && !charged) continue;
-    const vat = percentOf(calc.subtotal, vatPct);
+    const vat = vatOfLines(calc.lines, vatPct).vat;
     const issues: string[] = [];
     if (calc.sales_total && !running.length) issues.push("no contract this month");
     else if (calc.uncovered_total) issues.push(`€ ${calc.uncovered_total.toFixed(2)} sales outside a contract`);

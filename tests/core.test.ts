@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import * as be from "@/lib/belgium";
 import { buildOrderPayload } from "@/lib/billit";
-import { applyManual, compute, indexMonths } from "@/lib/contracts";
+import { applyManual, compute, indexMonths, vatOfLines } from "@/lib/contracts";
 import { closeMonth, deleteInvoice, mailValues } from "@/lib/invoicing";
 import { render } from "@/lib/mailer";
 import { clientTerminals, loadOverview } from "@/lib/month";
@@ -330,5 +330,29 @@ describe("first month", () => {
     expect(be.defaultPeriod("", today)).toBe("2026-09");
     expect(be.monthsFrom("2026-10", 24, new Date("2027-01-10T12:00:00Z"))).toEqual(["2027-01", "2026-12", "2026-11", "2026-10"]);
     expect(be.defaultPeriod("2026-10", new Date("2027-01-10T12:00:00Z"))).toBe("2026-12");
+  });
+});
+
+describe("transaction costs without VAT", () => {
+  it("put the transaction costs on the invoice at 0% and the rest at 21%", async () => {
+    const lines = compute(client(1, ["business:a"]), "2026-10", [row("2026-10-02", 1000), row("2026-10-20", 234.56)],
+      [contract({ pct: 20, fee_pct: 0.9, fee_mode: "invoice" })]).lines;
+    expect(vatOfLines(lines, 21)).toEqual({ rates: [{ pct: 21, base: 246.91, vat: 51.85 }, { pct: 0, base: 11.11, vat: 0 }], vat: 51.85 });
+
+    const store = MemoryStore.fresh();
+    const istanbul = (await store.clients()).find((c) => c.name === "Istanbul")!;
+    const overview = await loadOverview(store, "2026-09");
+    const row9 = overview.rows.find((r) => r.client.id === istanbul.id)!;
+    await closeMonth(store, "2026-09", [istanbul.id], "2026-10-03");
+    const [invoice] = await store.invoices({ period: "2026-09", clientId: istanbul.id });
+    const fee = invoice.lines.find((l) => l.kind === "fee")!;
+    expect(fee.vat_pct).toBe(0);
+    expect(invoice.lines.filter((l) => l.kind !== "fee").every((l) => l.vat_pct === 21)).toBe(true);
+    const taxable = be.roundMoney(invoice.subtotal - fee.unit_price);
+    expect(invoice.vat_amount).toBe(be.percentOf(taxable, 21));
+    expect(row9.total).toBe(invoice.total);
+    const payload = buildOrderPayload(invoice, istanbul) as { OrderLines: { VATPercentage: number }[] };
+    expect(payload.OrderLines.map((l) => l.VATPercentage)).toEqual([21, 0]);
+    expect((await invoicePdf(invoice, invoice.snapshot.company, invoice.snapshot.client)).subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

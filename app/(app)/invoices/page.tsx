@@ -101,6 +101,13 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td>Total</td><td /><td /><td />
+                  <td className="num">{fmtEur(sumMoney(view.map((i) => i.total)))}</td>
+                  <td colSpan={5} />
+                </tr>
+              </tfoot>
             </table>
           </TableWrap>
         )}

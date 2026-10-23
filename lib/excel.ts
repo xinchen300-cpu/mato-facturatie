@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 
-import { formatIban, periodLabel } from "./belgium";
+import { formatIban, periodLabel, sumMoney } from "./belgium";
 import { ownersOf } from "./contracts";
 import type { Overview } from "./month";
 import { machineLabel, machineSerial } from "./month";
@@ -27,6 +27,16 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
   for (const o of overview.own) {
     sheet.addRow({ client: o.label, items: o.items, sales: o.revenue, deal: "Eigen automaat: geen commissie, geen afrekening" });
   }
+  const totalRow = sheet.addRow({
+    client: "Totaal",
+    items: overview.rows.reduce((a, r) => a + r.calc.items, 0) + overview.own.reduce((a, o) => a + o.items, 0),
+    sales: sumMoney([...overview.rows.map((r) => r.calc.sales_total), ...overview.own.map((o) => o.revenue)]),
+    payout: sumMoney(overview.rows.map((r) => r.calc.payout)),
+    subtotal: sumMoney(overview.rows.map((r) => r.calc.subtotal)),
+    vat: sumMoney(overview.rows.map((r) => r.vat)),
+    total: sumMoney(overview.rows.map((r) => r.total)),
+  });
+  totalRow.font = { bold: true };
 
   const pay = book.addWorksheet("Uitbetalingen");
   pay.columns = [
@@ -40,6 +50,7 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
     pay.addRow({ client: client?.name ?? s.client_id, iban: formatIban(client?.iban), payout: Number(s.payout),
       paid: s.paid_out ? "ja" : "nee", on: s.paid_out_on ?? "" });
   }
+  if (statements.length) pay.addRow({ client: "Totaal", payout: sumMoney(statements.map((s) => Number(s.payout))) }).font = { bold: true };
 
   const machines = book.addWorksheet("Per automaat");
   machines.columns = [
@@ -61,6 +72,12 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
     totals.set(key, row);
   }
   [...totals.values()].sort((a, b) => b.revenue - a.revenue).forEach((r) => machines.addRow(r));
+  if (totals.size) {
+    machines.addRow({
+      owner: "Totaal", items: [...totals.values()].reduce((a, r) => a + r.items, 0),
+      revenue: sumMoney([...totals.values()].map((r) => r.revenue)),
+    }).font = { bold: true };
+  }
 
   for (const ws of [sheet, pay, machines]) {
     ws.getRow(1).font = { bold: true };

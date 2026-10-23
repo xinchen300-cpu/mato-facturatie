@@ -110,6 +110,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="font-semibold">
+                <td>Total</td>
+                <td className="num">{fmtNum(sum.items, 0)}</td>
+                <td className="num">{fmtEur(sum.sales)}</td>
+                <td />
+                <td className="num">{fmtEur(sum.commission)}</td>
+                <td />
+              </tr>
+            </tfoot>
           </table>
         </TableWrap>
       </Section>

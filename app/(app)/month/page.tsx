@@ -291,6 +291,13 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td /><td>Total</td><td /><td />
+                    <td className="num">{fmtEur(sumMoney(docs.map((r) => (r.invoice ? Number(r.invoice.total) : 0))))}</td>
+                    <td colSpan={3} />
+                  </tr>
+                </tfoot>
               </table>
             </TableWrap>
             {docs.flatMap((r) => [
@@ -338,6 +345,14 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td>Total</td><td />
+                  <td className="num">{fmtEur(sumMoney(payouts.map((r) => Number(r.statement!.payout))))}</td>
+                  <td />
+                  <td className="text-sm font-normal text-slate-500">still to pay out: {fmtEur(open)}</td>
+                </tr>
+              </tfoot>
             </table>
           </TableWrap>
         )}

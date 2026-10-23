@@ -43,12 +43,6 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
           Sales not on anyone&apos;s afrekening: {overview.unassigned.map((u) => `${u.label} (${fmtEur(u.revenue)})`).join(", ")}.
         </Notice>
       )}
-      {overview.own.length > 0 && (
-        <p className="mb-4 text-sm text-slate-500">
-          Your own sales (no afrekening): {overview.own.map((o) => `${o.label} ${fmtEur(o.revenue)}`).join(", ")}.
-        </p>
-      )}
-
       <Section title="Own sales figures" aside={<span className="text-sm text-slate-500">Instead of MATO Info, for one month</span>}>
         {overview.manual.length > 0 && (
           <TableWrap>
@@ -173,7 +167,7 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
 
       <Section step="1" title="Afrekeningen and commission invoices"
                aside={<span className="text-sm text-slate-500">Sales come live from MATO Info</span>}>
-        {!rows.length ? (
+        {!rows.length && !overview.own.length ? (
           <p className="text-sm text-slate-500">No client has sales or a running contract in {periodLabel(period)}.</p>
         ) : (
           <ActionForm action={makeDocuments}>
@@ -216,9 +210,26 @@ export default async function MonthPage({ searchParams }: { searchParams: Promis
                     );
                   })}
                 </tbody>
+                {overview.own.length > 0 && (
+                  <tbody className="border-t-2 border-slate-200">
+                    {overview.own.map((o) => (
+                      <tr key={o.key} className="text-slate-600">
+                        <td />
+                        <td>
+                          <div className="font-medium">{o.label}</div>
+                          <div className="font-mono text-xs text-slate-500">{o.terminals.join(", ")}</div>
+                        </td>
+                        <td className="num">{fmtEur(o.revenue)}</td>
+                        <td>Your own: no commission, no afrekening</td>
+                        <td className="num text-slate-400">-</td>
+                        <td colSpan={4} />
+                      </tr>
+                    ))}
+                  </tbody>
+                )}
                 <tfoot>
                   <tr className="font-semibold">
-                    <td /><td>Total</td><td className="num">{fmtEur(sumMoney(rows.map((r) => r.calc.sales_total)))}</td><td />
+                    <td /><td>Total</td><td className="num">{fmtEur(sumMoney([...rows.map((r) => r.calc.sales_total), ...overview.own.map((o) => o.revenue)]))}</td><td />
                     <td className="num">{fmtEur(sumMoney(rows.map((r) => r.calc.subtotal)))}</td><td colSpan={4} />
                   </tr>
                 </tfoot>

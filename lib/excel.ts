@@ -24,6 +24,9 @@ export async function monthWorkbook(overview: Overview, statements: Statement[])
     sheet.addRow({ client: r.client.name, items: r.calc.items, sales: r.calc.sales_total, payout: r.calc.payout, deal: r.calc.deal,
       subtotal: r.calc.subtotal, vat: r.vat, total: r.total, invoice: r.invoice?.number ?? "", issues: r.issues.join(", ") });
   }
+  for (const o of overview.own) {
+    sheet.addRow({ client: o.label, items: o.items, sales: o.revenue, deal: "Eigen automaat: geen commissie, geen afrekening" });
+  }
 
   const pay = book.addWorksheet("Uitbetalingen");
   pay.columns = [

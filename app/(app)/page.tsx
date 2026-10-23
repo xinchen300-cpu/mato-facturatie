@@ -18,7 +18,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     loadOverview(store, period), store.contracts(),
     store.salesDaily(yearStart, addDays(monthBounds(periods[0]).last, 0)),
   ]);
-  const sum = totals(overview.rows);
+  const totalsClients = totals(overview.rows);
+  // Your own machines count in the month's sales and items, not in the commission.
+  const sum = {
+    ...totalsClients,
+    sales: roundMoney(totalsClients.sales + overview.own.reduce((a, o) => a + o.revenue, 0)),
+    items: totalsClients.items + overview.own.reduce((a, o) => a + o.items, 0),
+  };
   const prevSales = roundMoney(history.filter((r) => r.day.startsWith(prev)).reduce((a, r) => a + Number(r.revenue), 0));
   const delta = prevSales && periods.includes(prev) ? ((sum.sales - prevSales) / prevSales) * 100 : null;
   const made = overview.rows.filter((r) => r.statement).length;
@@ -91,6 +97,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <td className="text-slate-600">{r.calc.deal || <span className="text-amber-700">no contract</span>}</td>
                   <td className="num">{fmtEur(r.calc.subtotal)}</td>
                   <td>{r.invoice?.number ?? ""}</td>
+                </tr>
+              ))}
+              {overview.own.map((o) => (
+                <tr key={o.key} className="text-slate-600">
+                  <td className="font-medium">{o.label}</td>
+                  <td className="num">{fmtNum(o.items, 0)}</td>
+                  <td className="num">{fmtEur(o.revenue)}</td>
+                  <td>Your own: no commission</td>
+                  <td className="num text-slate-400">-</td>
+                  <td />
                 </tr>
               ))}
             </tbody>

@@ -287,6 +287,16 @@ describe("your own sales", () => {
     expect(overview.unassigned).toEqual([]);
     expect(overview.own.map((o) => o.label)).toEqual(["Hillewaere"]);
     expect(overview.own[0].revenue).toBeGreaterThan(0);
+    expect(overview.own[0].items).toBeGreaterThan(0);
+    expect(overview.own[0].terminals.length).toBe(1);
+  });
+
+  it("lists your own machines also in a month without sales", async () => {
+    const store = MemoryStore.fresh();
+    const machine = (await store.catalog()).machines[0];
+    await store.saveSettings({ own_machines: machine.id });
+    const overview = await loadOverview(store, "2026-01");
+    expect(overview.own).toEqual([{ key: machine.id, label: machine.name, terminals: [machine.serial], items: 0, revenue: 0 }]);
   });
 });
 

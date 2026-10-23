@@ -93,8 +93,8 @@ export type Overview = {
   manual: ManualSales[];
   extras: ExtraLine[];
   unassigned: { owner: string; label: string; revenue: number }[];
-  /** Sales on your own machines (no client). */
-  own: { label: string; revenue: number }[];
+  /** Sales on your own machines and businesses (no client, no commission), also when there were none. */
+  own: { key: string; label: string; terminals: string[]; items: number; revenue: number }[];
   vatPct: number;
 };
 
@@ -153,14 +153,23 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
   const mine = ownMachines(settings.own_machines);
   const machineName = (id: string) => catalog.machines.find((m) => m.id === id)?.name ?? id;
   const unassignedMap = new Map<string, { label: string; revenue: number }>();
-  const ownMap = new Map<string, { label: string; revenue: number }>();
+  const ownMap = new Map<string, { label: string; machines: Set<string>; items: number; revenue: number }>();
+  for (const id of mine) {
+    if (catalog.machines.some((m) => m.id === id)) ownMap.set(id, { label: machineName(id), machines: new Set([id]), items: 0, revenue: 0 });
+  }
+  for (const key of mineBusinesses) {
+    const machines = catalog.machines.filter((m) => key === `business:${m.business_id}` || key === `business:${m.shared_business_id}`);
+    ownMap.set(key, { label: names[key] ?? key, machines: new Set(machines.map((m) => m.id)), items: 0, revenue: 0 });
+  }
   for (const r of daily) {
     if (owned.has(r.owner)) continue;
     const ownKey = mineBusinesses.has(r.owner) ? r.owner : r.owner === "business:none" && mine.has(r.machine_id) ? r.machine_id : null;
     if (ownKey) {
-      const entry = ownMap.get(ownKey) ?? { label: mineBusinesses.has(r.owner) ? names[r.owner] ?? r.owner : machineName(r.machine_id), revenue: 0 };
-      entry.revenue += Number(r.revenue);
+      const entry = ownMap.get(ownKey) ?? { label: machineName(r.machine_id), machines: new Set<string>(), items: 0, revenue: 0 };
       ownMap.set(ownKey, entry);
+      entry.machines.add(r.machine_id);
+      entry.items += Number(r.items);
+      entry.revenue += Number(r.revenue);
       continue;
     }
     const key = r.owner === "business:none" ? `${r.owner}@${r.machine_id}` : r.owner;
@@ -170,7 +179,10 @@ export async function loadOverview(store: Store, period: string): Promise<Overvi
     unassignedMap.set(key, entry);
   }
   const unassigned = [...unassignedMap.entries()].map(([owner, e]) => ({ owner, label: e.label, revenue: roundMoney(e.revenue) }));
-  const own = [...ownMap.values()].map((e) => ({ label: e.label, revenue: roundMoney(e.revenue) }));
+  const own = [...ownMap.entries()].map(([key, e]) => ({
+    key, label: e.label, items: e.items, revenue: roundMoney(e.revenue),
+    terminals: [...e.machines].map((id) => machineSerial(id, catalog)).filter(Boolean),
+  }));
 
   return { period, rows, catalog, clients, contracts, daily, manual, extras, unassigned, own, vatPct };
 }
